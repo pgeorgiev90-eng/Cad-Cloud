@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="bg"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CAD Cloud | PDG Systems</title>
+<style>
+:root{font-family:Inter,system-ui,Arial,sans-serif;color:#e7eef9;background:#0d1421}*{box-sizing:border-box}body{margin:0}header{padding:16px 24px;border-bottom:1px solid #273449;display:flex;align-items:center;justify-content:space-between;background:#111d30}h1{font-size:20px;margin:0}small{color:#93a5be}main{display:grid;grid-template-columns:270px 1fr;min-height:calc(100vh - 67px)}aside{padding:20px;background:#152237;border-right:1px solid #273449}label{display:block;margin:16px 0 6px;font-size:13px;color:#b9cbe0}input,button{font:inherit}input{width:100%;padding:10px;background:#0d1728;color:white;border:1px solid #42536a;border-radius:8px}button{padding:10px 12px;border:1px solid #435674;border-radius:8px;background:#253953;color:white;cursor:pointer;margin:5px 3px 5px 0}button.active,.primary{background:#1b83e7;border-color:#1b83e7}.workspace{padding:20px;min-width:0}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}.canvaswrap{background:#0b1523;border:1px solid #334761;border-radius:12px;overflow:hidden}svg{display:block;width:100%;height:min(70vh,740px);min-height:430px;touch-action:none;cursor:crosshair}.hint{color:#a8bad0;font-size:13px;line-height:1.5}.stat{font-size:22px;font-weight:700}.roof{fill:#284765;fill-opacity:.6;stroke:#62b9ff;stroke-width:2}.panel{fill:#1767b3;stroke:#8ed2ff;stroke-width:1.5}.draft{fill:none;stroke:#ffd166;stroke-width:2;stroke-dasharray:6 5}@media(max-width:780px){main{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid #273449}svg{min-height:380px}}
+</style></head><body>
+<header><div><h1>CAD Cloud</h1><small>by PDG Systems · PV Designer MVP</small></div><small>Локален прототип</small></header>
+<main><aside><h3>Настройки на проекта</h3><label for="project">Име</label><input id="project" value="Нов фотоволтаичен проект">
+<label for="power">Мощност на панел (Wp)</label><input id="power" type="number" min="1" max="2000" value="550">
+<label for="scale">Метри на клетка</label><input id="scale" type="number" min=".1" max="10" step=".1" value="1">
+<p class="hint">Една клетка от мрежата представлява зададения брой метри. Покривът се чертае чрез последователни щраквания по върховете и „Завърши покрив“.</p>
+<hr style="border:0;border-top:1px solid #344760"><p>Брой панели</p><div class="stat" id="count">0</div><p>Инсталирана мощност</p><div class="stat" id="total">0.00 kWp</div><p>Площ на покрива</p><div class="stat" id="area">0.0 m²</div></aside>
+<section class="workspace"><div class="toolbar">
+<button id="roofMode" class="active">Чертай покрив</button><button id="finish">Завърши покрив</button><button id="panelMode">Добави панел</button><button id="eraseMode">Изтрий панел</button><button id="undo">Назад</button><button id="clear">Изчисти</button><button id="save" class="primary">Запази</button><button id="load">Зареди</button><button id="export">Експорт JSON</button><input id="import" type="file" accept=".json,application/json" hidden><button id="importBtn">Импорт JSON</button></div>
+<div class="canvaswrap"><svg id="drawing" viewBox="0 0 1000 650" aria-label="Работна площ за чертане на покрив и панели"><defs><pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#29405a" stroke-width=".8"/></pattern></defs><rect width="1000" height="650" fill="url(#grid)"/><g id="shapes"></g></svg></div><p class="hint" id="status" role="status">Избери точки за очертанието на покрива. Панелите са условни правоъгълници 2 × 1 m; автоматично разполагане и отстояния ще добавим по-късно.</p>
+</section></main><script>
+'use strict';
+const $=id=>document.getElementById(id), svg=$('drawing'), layer=$('shapes'), NS='http://www.w3.org/2000/svg', GRID=25;
+let mode='roof',roof=[],panels=[],draft=[],history=[];
+function snap(v){return Math.round(v/GRID)*GRID}
+function point(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const m=svg.getScreenCTM();if(!m)return null;const q=p.matrixTransform(m.inverse());return {x:Math.max(0,Math.min(1000,snap(q.x))),y:Math.max(0,Math.min(650,snap(q.y)))}}
+function inside(p,poly){let hit=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a.y>p.y)!==(b.y>p.y))&&(p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x))hit=!hit}return hit}
+function polygonArea(poly){let s=0;for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];s+=a.x*b.y-b.x*a.y}return Math.abs(s)/2}
+function el(name,attrs){const node=document.createElementNS(NS,name);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);layer.append(node);return node}
+function snapshot(){history.push(JSON.stringify({roof,panels,draft}));if(history.length>80)history.shift()}
+function draw(){layer.replaceChildren();if(roof.length>=3)el('polygon',{points:roof.map(p=>p.x+','+p.y).join(' '),class:'roof'});if(draft.length){el('polyline',{points:draft.map(p=>p.x+','+p.y).join(' '),class:'draft'});for(const p of draft)el('circle',{cx:p.x,cy:p.y,r:4,fill:'#ffd166'})}
+for(const p of panels)el('rect',{x:p.x-25,y:p.y-12.5,width:50,height:25,rx:2,class:'panel'});
+$('count').textContent=panels.length;$('total').textContent=(panels.length*(Number($('power').value)||0)/1000).toFixed(2)+' kWp';$('area').textContent=(polygonArea(roof)/625*Math.pow(Number($('scale').value)||1,2)).toFixed(1)+' m²'}
+function panelFits(p){return roof.length>=3&&[{x:p.x-25,y:p.y-12.5},{x:p.x+25,y:p.y-12.5},{x:p.x-25,y:p.y+12.5},{x:p.x+25,y:p.y+12.5}].every(c=>inside(c,roof))}
+function setMode(m){mode=m;for(const id of ['roofMode','panelMode','eraseMode'])$(id).classList.toggle('active',id===({roof:'roofMode',panel:'panelMode',erase:'eraseMode'}[m]));$('status').textContent={roof:'Щраквай по върховете и натисни „Завърши покрив“.',panel:'Щракни вътре в покрива, за да поставиш панел.',erase:'Щракни върху панел, за да го премахнеш.'}[m]}
+svg.addEventListener('click',e=>{const p=point(e);if(!p)return;if(mode==='roof'){if(roof.length){$('status').textContent='Изчисти текущия покрив, за да начертаеш нов.';return}snapshot();draft.push(p)}else if(mode==='panel'){if(!panelFits(p)){$('status').textContent='Панелът трябва да бъде изцяло вътре в покрива.';return}if(panels.some(a=>Math.abs(a.x-p.x)<50&&Math.abs(a.y-p.y)<25))return;snapshot();panels.push(p)}else{const i=panels.findIndex(a=>Math.abs(a.x-p.x)<=25&&Math.abs(a.y-p.y)<=12.5);if(i>=0){snapshot();panels.splice(i,1)}}draw()});
+$('finish').onclick=()=>{if(draft.length<3){$('status').textContent='Нужни са поне 3 точки.';return}snapshot();roof=draft;draft=[];setMode('panel');draw()};
+$('roofMode').onclick=()=>setMode('roof');$('panelMode').onclick=()=>setMode('panel');$('eraseMode').onclick=()=>setMode('erase');
+$('undo').onclick=()=>{if(!history.length)return;const s=JSON.parse(history.pop());roof=s.roof;panels=s.panels;draft=s.draft;draw()};
+$('clear').onclick=()=>{if(!confirm('Да изчистя ли чертежа?'))return;snapshot();roof=[];panels=[];draft=[];setMode('roof');draw()};
+function data(){return {version:1,name:$('project').value,panelWp:Number($('power').value),metersPerCell:Number($('scale').value),roof,panels}}
+function valid(d){return d&&d.version===1&&typeof d.name==='string'&&Array.isArray(d.roof)&&Array.isArray(d.panels)&&d.roof.length<=200&&d.panels.length<=2000&&[...d.roof,...d.panels].every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=0&&p.x<=1000&&p.y>=0&&p.y<=650)}
+function restore(d){if(!valid(d))throw Error('Невалиден проект');snapshot();roof=d.roof;panels=d.panels;draft=[];$('project').value=d.name;$('power').value=d.panelWp||550;$('scale').value=d.metersPerCell||1;draw()}
+$('save').onclick=()=>{localStorage.setItem('cadcloud-project',JSON.stringify(data()));$('status').textContent='Проектът е записан в този браузър.'};
+$('load').onclick=()=>{try{const s=localStorage.getItem('cadcloud-project');if(!s)throw Error('Няма записан проект');restore(JSON.parse(s));$('status').textContent='Проектът е зареден.'}catch(e){$('status').textContent=e.message}};
+$('export').onclick=()=>{const blob=new Blob([JSON.stringify(data(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cad-cloud-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+$('importBtn').onclick=()=>$('import').click();$('import').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>2e6)throw Error('Файлът е твърде голям');restore(JSON.parse(await file.text()));$('status').textContent='Проектът е импортиран.'}catch(err){$('status').textContent=err.message}e.target.value=''};
+$('power').oninput=draw;$('scale').oninput=draw;draw();
+</script></body></html>
