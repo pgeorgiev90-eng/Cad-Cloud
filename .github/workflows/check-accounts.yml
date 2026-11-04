@@ -28,11 +28,13 @@ jobs:
         run: |
           php -l api/account-draft.php
           php -l api/admin-products-draft.php
+          php -l api/setup-admin-draft.php
+          php -l api/registration-draft.php
           php -l tests/bootstrap-account-ci.php
       - name: Test isolated login and authorization
         run: |
           php tests/bootstrap-account-ci.php
-          php -d auto_prepend_file=/tmp/pdg-test-https.php -S 127.0.0.1:8199 -t . > /tmp/pdg-php-server.log 2>&1 &
+          php -d auto_prepend_file=/tmp/pdg-test-https.php -d "sendmail_path=/bin/sh $GITHUB_WORKSPACE/tests/capture-mail-ci.sh" -S 127.0.0.1:8199 -t . > /tmp/pdg-php-server.log 2>&1 &
           for i in $(seq 1 30); do
             if curl -s -o /dev/null http://127.0.0.1:8199/api/account-draft.php?action=session; then break; fi
             sleep 1
