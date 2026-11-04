@@ -1,7 +1,11 @@
 import http.cookiejar, json, urllib.request, urllib.error
 BASE='http://127.0.0.1:8199/'
+class LocalTestCookiePolicy(http.cookiejar.DefaultCookiePolicy):
+    def return_ok_secure(self, cookie, request): return True
+
 def client():
-    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    jar=http.cookiejar.CookieJar(policy=LocalTestCookiePolicy())
+    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 def request(opener,path,data=None,csrf=None):
     headers={}
     if data is not None: headers['Content-Type']='application/json'
