@@ -1,0 +1,48 @@
+name: Check direct SuperHosting hostname and FTP directory
+
+on:
+  push:
+    paths:
+      - .github/workflows/check-superhosting-direct.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify server hostname resolves to hosting IP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket,sys
+          host="orbit.superhosting.bg"
+          ips=sorted({x[4][0] for x in socket.getaddrinfo(host,21,type=socket.SOCK_STREAM)})
+          print("Resolved IPs:",", ".join(ips))
+          if "185.80.2.82" not in ips:
+              sys.exit("Server hostname does not resolve to expected IP")
+          print("Correct server IP confirmed")
+          PY
+      - name: Install FTPS client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+      - name: Verify secure FTPS login and inspect remote root (read-only)
+        env:
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_USER" && test -n "$FTP_PASSWORD"
+          lftp -u "$FTP_USER","$FTP_PASSWORD" "ftp://orbit.superhosting.bg:21" <<'LFTP'
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate true
+          set net:max-retries 1
+          set net:timeout 15
+          set cmd:fail-exit true
+          pwd
+          cls -1
+          bye
+          LFTP
