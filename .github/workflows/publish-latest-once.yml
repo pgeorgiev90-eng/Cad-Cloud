@@ -38,3 +38,5 @@ jobs:
           mirror --reverse --verbose --only-newer --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob README.md --exclude-glob BUSINESS-ARCHITECTURE.md --exclude-glob .gitignore ./ /
           bye
           LFTP
+
+# Publish SolaX catalog images
