@@ -17,7 +17,7 @@ $path=dirname(__DIR__,2).'/pdg-shop-db.php';
 if (!is_file($path)) reply(503,['error'=>'setup_unavailable']);
 try {
   $s=require $path;
-  $key=is_array($s)?($s['setup_secret']??''):''; $expiry=is_array($s)?($s['setup_expires_at']??0):0;
+  $key=is_array($s)?($s['setup_secret']??''):''; $expiry=is_array($s)?($s['setup_expires_at']??((int)filemtime($path)+1800)):0;
   if (!is_string($key)||strlen($key)<32||!is_int($expiry)||$expiry<time()||$expiry>time()+3600) reply(503,['error'=>'setup_unavailable']);
   $data=json_decode(file_get_contents('php://input'),true);
   $given=is_array($data)&&is_string($data['setup_secret']??null)?$data['setup_secret']:'';
