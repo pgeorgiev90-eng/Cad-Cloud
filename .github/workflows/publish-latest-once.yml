@@ -35,7 +35,7 @@ jobs:
           set net:max-retries 2
           set net:timeout 20
           set cmd:fail-exit true
-          mirror --reverse --verbose --only-newer --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob README.md --exclude-glob BUSINESS-ARCHITECTURE.md --exclude-glob .gitignore ./ /
+          mirror --reverse --verbose --only-newer --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob tests/ --exclude-glob README.md --exclude-glob BUSINESS-ARCHITECTURE.md --exclude-glob .gitignore ./ /
           bye
           LFTP
 
@@ -48,3 +48,5 @@ jobs:
 # Publish disabled account foundation
 
 # Publish account and admin foundations
+
+# Publish administration dashboard after checks

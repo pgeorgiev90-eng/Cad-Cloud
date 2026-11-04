@@ -1,0 +1,50 @@
+name: Check account foundation
+on:
+  push:
+    branches:
+      - work/admin-dashboard-and-users
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: pdg_test
+          MYSQL_ROOT_PASSWORD: test-root-password
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP syntax
+        run: |
+          php -l api/account-draft.php
+          php -l api/admin-products-draft.php
+          php -l api/setup-admin-draft.php
+          php -l api/registration-draft.php
+          php -l tests/bootstrap-account-ci.php
+          php -l api/admin-common.php
+          php -l api/admin-users.php
+          php -l api/admin-dashboard-install.php
+          php -l api/admin-product-fields.php
+          php -l api/product-details.php
+          php -l api/product-view.php
+          php -l api/admin-stats.php
+      - name: Test isolated login and authorization
+        run: |
+          php tests/bootstrap-account-ci.php
+          php -d auto_prepend_file=/tmp/pdg-test-https.php -d "sendmail_path=/bin/sh $GITHUB_WORKSPACE/tests/capture-mail-ci.sh" -S 127.0.0.1:8199 -t . > /tmp/pdg-php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:8199/api/account-draft.php?action=session; then break; fi
+            sleep 1
+          done
+          python3 tests/account_security.py
+          python3 tests/dashboard_security.py
