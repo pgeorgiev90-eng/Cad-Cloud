@@ -1,4 +1,4 @@
-import http.cookiejar, json, urllib.request, urllib.error
+import http.cookiejar, json, urllib.request, urllib.error, subprocess
 BASE='http://127.0.0.1:8199/'
 class LocalTestCookiePolicy(http.cookiejar.DefaultCookiePolicy):
     def return_ok_secure(self, cookie, request): return True
@@ -47,4 +47,21 @@ status,_=request(admin,'api/account-draft.php?action=logout',{},admin_csrf)
 check(status==200,'logout')
 status,_=request(admin,'api/admin-products-draft.php')
 check(status==401,'logout revokes session')
-print('Account and role checks passed.')
+setup=client()
+_,body=request(setup,'api/account-draft.php?action=session')
+setup_csrf=body['csrf']
+details={'setup_secret':'wrong-secret','email':'new-admin@example.test','password':'Longer-test-password-123'}
+status,_=request(setup,'api/setup-admin-draft.php',details,setup_csrf)
+check(status==403,'wrong setup secret must fail')
+details['setup_secret']='test-only-long-random-string-123456789'
+status,_=request(setup,'api/setup-admin-draft.php',details,setup_csrf)
+check(status==409,'setup must not overwrite existing accounts')
+subprocess.run(['php','tests/reset-setup-ci.php'],check=True)
+status,body=request(setup,'api/setup-admin-draft.php',details,setup_csrf)
+check(status==200 and body['ok'],'initial setup')
+status,_=request(setup,'api/setup-admin-draft.php',details,setup_csrf)
+check(status==409,'setup must be one-time')
+_,body=request(setup,'api/account-draft.php?action=session')
+status,body=request(setup,'api/account-draft.php?action=login',{'email':'new-admin@example.test','password':'Longer-test-password-123'},body['csrf'])
+check(status==200 and body['user']['role']=='admin','new admin login')
+print('Account, role and guarded setup checks passed.')
