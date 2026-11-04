@@ -1,0 +1,31 @@
+name: Diagnose hosting hostname candidates
+
+on:
+  push:
+    paths:
+      - .github/workflows/diagnose-hostname-candidates.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hostname:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check server PTR and hostname candidates (no credentials)
+        run: |
+          python3 - <<'PY'
+          import socket
+          target="185.80.2.82"
+          try:
+              print("Reverse DNS:",socket.gethostbyaddr(target)[0])
+          except OSError as e:
+              print("Reverse DNS unavailable:",type(e).__name__)
+          for h in ("orbit.superhosting.bg","ftp.pdgsystems.bg","pdgsystems.bg"):
+              try:
+                  ips=sorted({x[4][0] for x in socket.getaddrinfo(h,21,type=socket.SOCK_STREAM)})
+                  print(h, "matches hosting IP:",target in ips,"resolved:",",".join(ips))
+              except OSError:
+                  print(h,"DNS lookup unavailable")
+          PY
