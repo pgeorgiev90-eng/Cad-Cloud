@@ -1,0 +1,25 @@
+name: Verify deployed account draft and catalog
+on:
+  push:
+    paths:
+      - .github/workflows/check-account-deployment.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check public endpoints
+        run: |
+          set -euo pipefail
+          account=$(curl --silent --show-error --max-time 30 -o /tmp/pdg-account.json -w '%{http_code}' https://pdgsystems.bg/api/account-draft.php)
+          catalog=$(curl --silent --show-error --max-time 30 -o /tmp/pdg-products.json -w '%{http_code}' https://pdgsystems.bg/api/products.php)
+          ACCOUNT_STATUS="$account" CATALOG_STATUS="$catalog" python3 - <<'PY'
+          import json, os, sys
+          a=json.load(open('/tmp/pdg-account.json',encoding='utf-8'))
+          c=json.load(open('/tmp/pdg-products.json',encoding='utf-8'))
+          print('Account HTTP:',os.environ['ACCOUNT_STATUS'],'account result:',a.get('error','unexpected'))
+          print('Catalog HTTP:',os.environ['CATALOG_STATUS'],'product count:',len(c.get('products',[])))
+          if os.environ['ACCOUNT_STATUS']!='503' or a.get('error')!='account_service_not_enabled': sys.exit('Account endpoint is not confirmed disabled')
+          if os.environ['CATALOG_STATUS']!='200' or not isinstance(c.get('products'),list): sys.exit('Catalog is unavailable')
+          PY
