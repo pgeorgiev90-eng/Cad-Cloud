@@ -1,0 +1,102 @@
+[
+  {
+    "brand": "Enerack",
+    "code": "TRB-D10",
+    "manufacturer_code": "ERK-TRB-D10",
+    "source": "https://www.enerack.com/uploadfile/downloads/2026%20Enerack%20Product%20Catalogue.pdf",
+    "fields": [
+      {
+        "label": "Тип",
+        "value": "Мини релса"
+      },
+      {
+        "label": "Височина на профила",
+        "value": "26 мм"
+      },
+      {
+        "label": "Приложение",
+        "value": "Вълнообразна или трапецовидна ламарина"
+      }
+    ]
+  },
+  {
+    "brand": "Enerack",
+    "code": "TRB-D11",
+    "manufacturer_code": "ERK-TRB-D11",
+    "source": "https://www.enerack.com/uploadfile/downloads/2026%20Enerack%20Product%20Catalogue.pdf",
+    "fields": [
+      {
+        "label": "Тип",
+        "value": "U-образна релса"
+      },
+      {
+        "label": "Височина на профила",
+        "value": "29 мм"
+      },
+      {
+        "label": "Приложение",
+        "value": "Вълнообразна или трапецовидна ламарина"
+      }
+    ]
+  },
+  {
+    "brand": "Enerack",
+    "code": "TRB-D13",
+    "manufacturer_code": "ERK-TRB-D13",
+    "source": "https://www.enerack.com/uploadfile/downloads/2026%20Enerack%20Product%20Catalogue.pdf",
+    "fields": [
+      {
+        "label": "Тип",
+        "value": "Мини релса"
+      },
+      {
+        "label": "Височина на профила",
+        "value": "60 мм"
+      },
+      {
+        "label": "Приложение",
+        "value": "Вълнообразна или трапецовидна ламарина"
+      }
+    ]
+  },
+  {
+    "brand": "Enerack",
+    "code": "TRB-D20",
+    "manufacturer_code": "ERK-TRB-D20",
+    "source": "https://www.enerack.com/uploadfile/downloads/2026%20Enerack%20Product%20Catalogue.pdf",
+    "fields": [
+      {
+        "label": "Тип",
+        "value": "Мини релса"
+      },
+      {
+        "label": "Височина на профила",
+        "value": "65 мм"
+      },
+      {
+        "label": "Приложение",
+        "value": "Вълнообразна или трапецовидна ламарина"
+      }
+    ]
+  },
+  {
+    "brand": "Enerack",
+    "code": "TRB-D30",
+    "manufacturer_code": "ERK-TRB-D30",
+    "source": "https://www.enerack.com/uploadfile/downloads/2026%20Enerack%20Product%20Catalogue.pdf",
+    "fields": [
+      {
+        "label": "Тип",
+        "value": "U-образна релса"
+      },
+      {
+        "label": "Височина на профила",
+        "value": "50 мм"
+      },
+      {
+        "label": "Приложение",
+        "value": "Вълнообразна или трапецовидна ламарина"
+      }
+    ]
+  }
+]
