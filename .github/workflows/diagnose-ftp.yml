@@ -1,0 +1,43 @@
+name: Diagnose SuperHosting FTP connection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check FTP host DNS and TCP without uploading files
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+        run: |
+          python3 - <<'PY'
+          import os, socket, ipaddress, sys
+          host = os.environ.get("FTP_HOST", "").strip()
+          if not host:
+              print("ERROR: FTP_HOST secret is missing or empty")
+              sys.exit(1)
+          if "://" in host or "/" in host or ":" in host or any(c.isspace() for c in host):
+              print("ERROR: FTP_HOST must contain only a hostname or IPv4 address, without protocol, port or spaces")
+              sys.exit(1)
+          try:
+              addresses = socket.getaddrinfo(host, 21, type=socket.SOCK_STREAM)
+          except socket.gaierror as exc:
+              print(f"ERROR: DNS resolution failed ({exc.__class__.__name__}); verify FTP_HOST")
+              sys.exit(1)
+          print("OK: FTP_HOST resolves to an address")
+          for family, kind, proto, canon, sockaddr in addresses:
+              try:
+                  with socket.create_connection(sockaddr[:2], timeout=8) as s:
+                      banner = s.recv(200).decode("ascii", "replace").strip()
+                      print("OK: TCP port 21 is reachable")
+                      print("FTP greeting received:", banner[:3].isdigit())
+                      sys.exit(0)
+              except OSError:
+                  continue
+          print("ERROR: Host resolves, but TCP port 21 is not reachable")
+          sys.exit(1)
+          PY
