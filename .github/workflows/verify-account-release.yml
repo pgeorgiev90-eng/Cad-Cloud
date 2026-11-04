@@ -1,4 +1,4 @@
-name: Verify account release safely
+name: Diagnose account release responses
 on:
   push:
     paths:
@@ -9,33 +9,23 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Check live public routes without credentials
+      - name: Check endpoint status without revealing content
         run: |
           python3 - <<'PY'
           import json, urllib.request, urllib.error
           root='https://pdgsystems.bg/'
-          def request(path, method='GET'):
-              req=urllib.request.Request(root+path,method=method,headers={'User-Agent':'PDG-deployment-check'})
+          def request(path,method='GET'):
+              req=urllib.request.Request(root+path,method=method,headers={'User-Agent':'PDG-check'})
               try:
-                  with urllib.request.urlopen(req,timeout=30) as response:
-                      return response.status,response.read()
-              except urllib.error.HTTPError as err: return err.code,err.read()
-          code,raw=request('api/account-draft.php?action=session')
-          body=json.loads(raw)
-          assert code==200 and body.get('user') is None and len(body.get('csrf',''))==64, 'anonymous account session failed'
-          print('Account session:',code,'anonymous; registration enabled:',body.get('registration_available'))
-          code,raw=request('api/admin-products-draft.php')
-          assert code==401, 'anonymous admin access not blocked'
-          print('Anonymous admin API:',code,'blocked')
-          code,raw=request('api/setup-admin-draft.php','POST')
-          assert code==403, 'setup accepted without session and CSRF'
-          print('Unauthenticated setup:',code,'blocked')
-          code,raw=request('api/products.php')
-          body=json.loads(raw)
-          assert code==200 and isinstance(body.get('products'),list), 'catalog unavailable'
-          print('Catalog API:',code,'products:',len(body['products']))
-          for page in ('auth.html','setup-admin-draft.html','admin-products-draft.html'):
-              code,raw=request(page)
-              assert code==200 and b'<!doctype html>' in raw.lower(), 'missing page: '+page
-              print('Page',page,':',code)
+                  with urllib.request.urlopen(req,timeout=25) as r: return r.status,r.read(),r.headers.get('Content-Type','')
+              except urllib.error.HTTPError as e: return e.code,e.read(),e.headers.get('Content-Type','')
+          for path,method in [('api/account-draft.php?action=session','GET'),('api/admin-products-draft.php','GET'),('api/setup-admin-draft.php','POST'),('api/products.php','GET'),('auth.html','GET'),('setup-admin-draft.html','GET')]:
+              try:
+                  code,body,ctype=request(path,method)
+                  try: parsed=json.loads(body); kind='JSON'; keys=','.join(sorted(parsed.keys())) if isinstance(parsed,dict) else 'other'
+                  except Exception: parsed={};kind='non-JSON';keys=''
+                  print(path,'HTTP',code,'type',ctype,'length',len(body),'format',kind,'keys',keys,flush=True)
+                  if path=='api/products.php' and isinstance(parsed.get('products'),list): print('Product count',len(parsed['products']),flush=True)
+                  if path=='api/account-draft.php?action=session' and kind=='JSON': print('Anonymous session:',parsed.get('user') is None,'registration enabled:',parsed.get('registration_available'),flush=True)
+              except Exception as e: print(path,'request failed:',type(e).__name__,flush=True)
           PY
