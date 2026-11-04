@@ -2,7 +2,7 @@ name: Check account foundation
 on:
   push:
     branches:
-      - work/dashboard-stat-charts
+      - work/shop-and-manufacturer-data
 permissions:
   contents: read
 jobs:
@@ -38,6 +38,8 @@ jobs:
           php -l api/product-details.php
           php -l api/product-view.php
           php -l api/admin-stats.php
+          php -l api/admin-orders.php
+          php -l api/orders.php
       - name: Test isolated login and authorization
         run: |
           php tests/bootstrap-account-ci.php
@@ -48,3 +50,4 @@ jobs:
           done
           python3 tests/account_security.py
           python3 tests/dashboard_security.py
+          python3 tests/order_security.py
