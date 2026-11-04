@@ -53,7 +53,7 @@ setup_csrf=body['csrf']
 details={'setup_secret':'wrong-secret','email':'new-admin@example.test','password':'Longer-test-password-123'}
 status,_=request(setup,'api/setup-admin-draft.php',details,setup_csrf)
 check(status==403,'wrong setup secret must fail')
-details['setup_secret']='test-only-long-random-string-123456789'
+details['setup_secret']='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 status,_=request(setup,'api/setup-admin-draft.php',details,setup_csrf)
 check(status==409,'setup must not overwrite existing accounts')
 subprocess.run(['php','tests/reset-setup-ci.php'],check=True)
