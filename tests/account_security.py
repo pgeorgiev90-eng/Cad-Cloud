@@ -1,4 +1,4 @@
-import http.cookiejar, json, urllib.request, urllib.error, subprocess
+import http.cookiejar, json, urllib.request, urllib.error, subprocess, re
 BASE='http://127.0.0.1:8199/'
 class LocalTestCookiePolicy(http.cookiejar.DefaultCookiePolicy):
     def return_ok_secure(self, cookie, request): return True
@@ -64,4 +64,25 @@ check(status==409,'setup must be one-time')
 _,body=request(setup,'api/account-draft.php?action=session')
 status,body=request(setup,'api/account-draft.php?action=login',{'email':'new-admin@example.test','password':'Longer-test-password-123'},body['csrf'])
 check(status==200 and body['user']['role']=='admin','new admin login')
-print('Account, role and guarded setup checks passed.')
+visitor=client()
+_,body=request(visitor,'api/account-draft.php?action=session')
+visitor_csrf=body['csrf']
+registration={'email':'new-customer@example.test','password':'Customer-long-password-123'}
+status,_=request(visitor,'api/registration-draft.php?action=register',registration)
+check(status==403,'registration requires CSRF')
+status,body=request(visitor,'api/registration-draft.php?action=register',registration,visitor_csrf)
+check(status==200 and body['ok'],'registration')
+status,_=request(visitor,'api/account-draft.php?action=login',registration,visitor_csrf)
+check(status==401,'unverified account must not log in')
+message=open('/tmp/pdg-captured-mail.txt',encoding='utf-8').read()
+match=re.search(r'#token=([a-f0-9]{64})',message)
+check(bool(match),'confirmation email must contain token')
+status,_=request(visitor,'api/registration-draft.php?action=verify',{'token':'a'*64},visitor_csrf)
+check(status==400,'incorrect verification token must fail')
+status,body=request(visitor,'api/registration-draft.php?action=verify',{'token':match.group(1)},visitor_csrf)
+check(status==200 and body['ok'],'email confirmation')
+status,_=request(visitor,'api/registration-draft.php?action=verify',{'token':match.group(1)},visitor_csrf)
+check(status==400,'verification token must be one-time')
+status,body=request(visitor,'api/account-draft.php?action=login',registration,visitor_csrf)
+check(status==200 and body['user']['role']=='customer','verified customer login')
+print('Login, admin authorization, setup and email verification checks passed.')
