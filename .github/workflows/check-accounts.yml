@@ -2,7 +2,7 @@ name: Check account foundation
 on:
   push:
     branches:
-      - work/admin-dashboard-and-users
+      - work/dashboard-stat-charts
 permissions:
   contents: read
 jobs:
