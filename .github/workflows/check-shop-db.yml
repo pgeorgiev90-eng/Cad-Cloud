@@ -24,3 +24,5 @@ jobs:
           else:
               print("API error:",result.get('error','unknown') if isinstance(result,dict) else 'unexpected_response')
           PY
+
+# Recheck after configuration was moved
