@@ -1,0 +1,32 @@
+CREATE TABLE IF NOT EXISTS pdg_orders (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ request_key CHAR(64) NOT NULL UNIQUE,
+ customer_name VARCHAR(160) NOT NULL,
+ email VARCHAR(254) NOT NULL,
+ phone VARCHAR(40) NOT NULL,
+ address VARCHAR(500) NOT NULL,
+ note TEXT NOT NULL,
+ payment_method VARCHAR(30) NOT NULL DEFAULT 'cod',
+ status VARCHAR(30) NOT NULL DEFAULT 'pending',
+ subtotal_cents BIGINT UNSIGNED NOT NULL,
+ vat_cents BIGINT UNSIGNED NOT NULL,
+ total_cents BIGINT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_order_created(created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS pdg_order_items (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ order_id BIGINT UNSIGNED NOT NULL,
+ product_id BIGINT UNSIGNED NOT NULL,
+ product_name VARCHAR(500) NOT NULL,
+ product_code VARCHAR(190) NOT NULL,
+ unit_price_cents BIGINT UNSIGNED NOT NULL,
+ quantity INT UNSIGNED NOT NULL,
+ KEY idx_order_items_order(order_id),
+ CONSTRAINT fk_pdg_order_items_order FOREIGN KEY(order_id) REFERENCES pdg_orders(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS pdg_order_attempts (
+ identifier_hash CHAR(64) NOT NULL PRIMARY KEY,
+ window_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ attempt_count INT UNSIGNED NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
