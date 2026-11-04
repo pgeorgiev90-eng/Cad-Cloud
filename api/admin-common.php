@@ -10,6 +10,11 @@ function pdg_admin_session(): array {
   ini_set('session.use_strict_mode','1');ini_set('session.use_only_cookies','1');
   session_name('PDGSESSION');
   session_set_cookie_params(['lifetime'=>0,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);session_start();
+  if (isset($_SESSION['user']['id'])) {
+    $now=time(); $start=(int)($_SESSION['login_at']??0); $last=(int)($_SESSION['last_activity']??0);
+    if (!$start || !$last || $now-$last>1800 || $now-$start>43200) { unset($_SESSION['user']); pdg_answer(401,['error'=>'session_expired']); }
+    $_SESSION['last_activity']=$now;
+  }
   $id=(int)($_SESSION['user']['id']??0);
   if($id<1)pdg_answer(401,['error'=>'authentication_required']);
   $path=dirname(__DIR__,2).'/pdg-shop-db.php';
