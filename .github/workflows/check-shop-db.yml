@@ -1,0 +1,26 @@
+name: Check shop database connection
+on:
+  push:
+    paths:
+      - .github/workflows/check-shop-db.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check catalog API
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --location --max-time 30 --output /tmp/pdg-response.json --write-out '%{http_code}' https://pdgsystems.bg/api/products.php)
+          echo "HTTP status: $code"
+          python3 - <<'PY'
+          import json
+          with open('/tmp/pdg-response.json',encoding='utf-8') as f:
+              try: result=json.load(f)
+              except Exception: raise SystemExit("Response was not JSON.")
+          if isinstance(result,dict) and isinstance(result.get('products'),list):
+              print("Product count:",len(result['products']))
+          else:
+              print("API error:",result.get('error','unknown') if isinstance(result,dict) else 'unexpected_response')
+          PY
