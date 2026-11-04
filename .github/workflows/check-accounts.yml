@@ -1,0 +1,14 @@
+name: Check account foundation
+on:
+  push:
+    branches:
+      - work/secure-account-foundation
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP syntax
+        run: php -l api/account-draft.php
