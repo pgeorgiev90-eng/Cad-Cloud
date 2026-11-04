@@ -15,6 +15,9 @@ $lines=[];foreach($v['items'] as $item){if(!is_array($item)||!filter_var($item['
 try{
  $path=dirname(__DIR__,2).'/pdg-shop-db.php';if(!is_file($path))throw new RuntimeException();$s=require $path;if(!is_array($s))throw new RuntimeException();
  $db=new PDO('mysql:host='.($s['host']??'localhost').';dbname='.($s['database']??'').';charset=utf8mb4',$s['username']??'',$s['password']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+ // Create only the bundled, additive order tables if the admin has not opened the panel yet.
+ $schema=file_get_contents(dirname(__DIR__).'/database/orders-schema.sql');if($schema===false)throw new RuntimeException('schema');
+ foreach(preg_split('/;\\s*(?:\\r?\\n|$)/',$schema) as $statement){$statement=trim($statement);if($statement!=='')$db->exec($statement);}
  $key=hash('sha256',(string)($_SERVER['REMOTE_ADDR']??'unknown'));$db->beginTransaction();
  $q=$db->prepare('INSERT INTO pdg_order_attempts(identifier_hash,window_start,attempt_count) VALUES (?,NOW(),0) ON DUPLICATE KEY UPDATE identifier_hash=VALUES(identifier_hash)');$q->execute([$key]);
  $q=$db->prepare('SELECT attempt_count,window_start < DATE_SUB(NOW(), INTERVAL 15 MINUTE) AS expired FROM pdg_order_attempts WHERE identifier_hash=? FOR UPDATE');$q->execute([$key]);$attempt=$q->fetch();
