@@ -25,6 +25,8 @@ bad={**data,'items':[{'id':int(product['id']),'quantity':2,'unit_cents':1}]}
 st,_=req(v,'api/orders.php',bad,csrf);check(st==409,'reject stale or forged price')
 st,o=req(v,'api/orders.php',data,csrf);check(st==200 and o['order_id']>0,'submit order')
 st,again=req(v,'api/orders.php',data,csrf);check(st==200 and again['order_id']==o['order_id'],'idempotency')
+changed={**data,'address':'Other address'}
+st,_=req(v,'api/orders.php',changed,csrf);check(st==409,'retry with changed data must not return original order')
 st,_=req(v,'api/admin-orders.php');check(st==401,'anonymous cannot read orders')
 st,orders=req(a,'api/admin-orders.php');order=next(x for x in orders['orders'] if int(x['id'])==o['order_id'])
 check(st==200 and int(order['subtotal_cents'])==2100 and int(order['vat_cents'])==420 and int(order['total_cents'])==2520,'vat calculation')
