@@ -6,9 +6,35 @@ on:
 permissions:
   contents: read
 jobs:
-  lint:
+  integration:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: pdg_test
+          MYSQL_ROOT_PASSWORD: test-root-password
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     steps:
       - uses: actions/checkout@v4
       - name: Check PHP syntax
-        run: php -l api/account-draft.php
+        run: |
+          php -l api/account-draft.php
+          php -l api/admin-products-draft.php
+          php -l tests/bootstrap-account-ci.php
+      - name: Test isolated login and authorization
+        run: |
+          php tests/bootstrap-account-ci.php
+          php -d auto_prepend_file=/tmp/pdg-test-https.php -S 127.0.0.1:8199 -t . > /tmp/pdg-php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:8199/api/account-draft.php?action=session; then break; fi
+            sleep 1
+          done
+          python3 tests/account_security.py
