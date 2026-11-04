@@ -4,7 +4,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 try {
-  $config = dirname(__DIR__) . '/pdg-shop-db.php';
+  $config = dirname(__DIR__, 2) . '/pdg-shop-db.php';
   if (!is_file($config)) { http_response_code(503); echo json_encode(['error'=>'database_not_configured']); exit; }
   $settings = require $config;
   if (!is_array($settings)) { throw new RuntimeException('Invalid configuration'); }
