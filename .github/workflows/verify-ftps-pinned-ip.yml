@@ -13,7 +13,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Check TLS identity and read-only FTP listing using pinned IP
+      - name: Test encrypted FTP login and read-only root listing
         env:
           FTP_USER: ${{ secrets.FTP_USER }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
@@ -21,15 +21,14 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$FTP_USER" && test -n "$FTP_PASSWORD"
-          curl --fail --show-error --silent --verbose --max-time 35 \
-            --ssl-reqd --ftp-ssl-control \
+          # The reverse-DNS name matches the real certificate but has no public A record.
+          # --resolve pins the TLS-verified hostname to the known hosting IP.
+          curl --fail --show-error --silent --max-time 35 \
+            --ssl-reqd \
             --resolve host-185-80-2-82.superhosting.bg:21:185.80.2.82 \
             --user "$FTP_USER:$FTP_PASSWORD" \
             "ftp://host-185-80-2-82.superhosting.bg:21/" \
-            -o /tmp/ftp-root-listing.txt 2>/tmp/ftps-diagnostic.txt || {
-              sed -E 's/(Authorization: ).*/\1[redacted]/I; s/(USER |PASS ).*/\1[redacted]/I' /tmp/ftps-diagnostic.txt | tail -35
-              exit 1
-            }
-          echo "FTPS TLS and authentication succeeded."
-          echo "Remote root entries:"
-          head -50 /tmp/ftp-root-listing.txt
+            -o /tmp/ftp-root-listing.txt
+          echo "FTPS certificate and login verified."
+          echo "FTP root listing:"
+          head -40 /tmp/ftp-root-listing.txt
