@@ -1,0 +1,4 @@
+<?php
+// Save this file ONE LEVEL ABOVE public_html as pdg-shop-db.php.
+// Do not commit actual credentials to GitHub.
+return ['host'=>'localhost','database'=>'pdgsyste_pdg_shop','username'=>'YOUR_DB_USER','password'=>'YOUR_DB_PASSWORD'];
