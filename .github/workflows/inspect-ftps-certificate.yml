@@ -1,0 +1,66 @@
+name: Inspect SuperHosting FTPS certificate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read FTPS TLS certificate names without logging in
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, ssl, socket, sys, ipaddress
+          host = os.environ.get("FTP_HOST", "").strip()
+          if not host or "://" in host or "/" in host or ":" in host or any(x.isspace() for x in host):
+              sys.exit("Invalid FTP_HOST")
+          print("Connecting to FTP port 21 and requesting explicit TLS...")
+          with socket.create_connection((host, 21), timeout=15) as s:
+              s.settimeout(15)
+              def response():
+                  lines = []
+                  while True:
+                      line = b""
+                      while not line.endswith(b"\n"):
+                          part = s.recv(1)
+                          if not part:
+                              raise RuntimeError("FTP server closed connection")
+                          line += part
+                      lines.append(line.decode("utf-8", "replace").strip())
+                      if len(lines) == 1 and len(lines[0]) >= 4 and lines[0][3] != "-":
+                          break
+                      if len(lines) > 1 and len(line) >= 4 and line[:3] == lines[0][:3].encode() and line[3:4] == b" ":
+                          break
+                  return lines
+              banner = response()
+              print("FTP greeting code:", banner[0][:3])
+              s.sendall(b"AUTH TLS\r\n")
+              reply = response()
+              print("AUTH TLS reply code:", reply[0][:3])
+              if not reply[0].startswith("234"):
+                  sys.exit("Server did not accept AUTH TLS")
+              ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+              ctx.check_hostname = False
+              ctx.verify_mode = ssl.CERT_REQUIRED
+              ctx.load_default_certs()
+              with ctx.wrap_socket(s, server_hostname=host) as tls:
+                  print("Certificate chain: trusted by system CAs")
+                  print("TLS protocol:", tls.version())
+                  cert = tls.getpeercert()
+                  print("Certificate subject:", cert.get("subject"))
+                  print("Certificate SAN:", cert.get("subjectAltName"))
+                  print("Certificate issuer:", cert.get("issuer"))
+                  print("Certificate valid until:", cert.get("notAfter"))
+                  try:
+                      ssl.match_hostname(cert, host)
+                      print("Hostname match: YES")
+                  except Exception:
+                      print("Hostname match: NO (expected when using a server IP)")
+          PY
