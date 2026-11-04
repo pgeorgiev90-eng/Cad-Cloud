@@ -28,6 +28,26 @@ if ($action === 'session' && $_SERVER['REQUEST_METHOD'] === 'GET') {
             $registrationAvailable = is_array($cfg) && ($cfg['registration_enabled'] ?? false) === true;
         }
     } catch (Throwable $e) { $registrationAvailable = false; }
+    if (isset($_SESSION['user']['id'])) {
+        $now=time(); $start=(int)($_SESSION['login_at']??0); $last=(int)($_SESSION['last_activity']??0);
+        if (!$start || !$last || $now-$last>1800 || $now-$start>43200) {
+            unset($_SESSION['user'],$_SESSION['login_at'],$_SESSION['last_activity']);
+            session_regenerate_id(true); $_SESSION['csrf']=bin2hex(random_bytes(32));
+        } else {
+            try {
+                if (!isset($cfg) || !is_array($cfg)) throw new RuntimeException('configuration');
+                $db=new PDO('mysql:host='.($cfg['host']??'localhost').';dbname='.($cfg['database']??'').';charset=utf8mb4',$cfg['username']??'',$cfg['password']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
+                $q=$db->prepare('SELECT id,email,role,is_active FROM pdg_users WHERE id=?');$q->execute([(int)$_SESSION['user']['id']]);$fresh=$q->fetch();
+                if (!$fresh || (int)$fresh['is_active']!==1) {
+                    unset($_SESSION['user'],$_SESSION['login_at'],$_SESSION['last_activity']);
+                    session_regenerate_id(true); $_SESSION['csrf']=bin2hex(random_bytes(32));
+                } else {
+                    $_SESSION['user']=['id'=>(int)$fresh['id'],'email'=>$fresh['email'],'role'=>$fresh['role']];
+                    $_SESSION['last_activity']=$now;
+                }
+            } catch (Throwable $e) { respond(503,['error'=>'service_unavailable']); }
+        }
+    }
     respond(200, ['csrf'=>$_SESSION['csrf'], 'user'=>$_SESSION['user'] ?? null, 'registration_available'=>$registrationAvailable]);
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') respond(405, ['error'=>'method_not_allowed']);
@@ -78,6 +98,7 @@ try {
     session_regenerate_id(true);
     $_SESSION['csrf']=bin2hex(random_bytes(32));
     $_SESSION['user']=['id'=>(int)$user['id'],'email'=>$user['email'],'role'=>$user['role']];
+    $_SESSION['login_at']=time(); $_SESSION['last_activity']=time();
     respond(200,['ok'=>true,'user'=>$_SESSION['user']]);
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
