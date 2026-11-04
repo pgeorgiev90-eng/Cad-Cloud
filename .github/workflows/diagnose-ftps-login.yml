@@ -35,6 +35,6 @@ jobs:
           set net:max-retries 1
           set net:timeout 15
           set cmd:fail-exit true
-          pwd
+          cls -1
           bye
           LFTP
