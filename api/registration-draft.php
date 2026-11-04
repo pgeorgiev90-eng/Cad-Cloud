@@ -44,10 +44,10 @@ try {
   if ((int)$a['attempt_count']>=5){$db->commit();response(429,['error'=>'try_later']);}
   $q=$db->prepare('UPDATE pdg_login_attempts SET attempt_count=attempt_count+1 WHERE identifier_hash=?');$q->execute([$key]);$db->commit();
   $db->beginTransaction();
-  $q=$db->prepare('SELECT id,is_active FROM pdg_users WHERE email=? FOR UPDATE');$q->execute([$email]);$user=$q->fetch();
-  if (!$user){$q=$db->prepare("INSERT INTO pdg_users(email,password_hash,role,is_active) VALUES (?,?,'customer',0)");$q->execute([$email,password_hash($password,PASSWORD_DEFAULT)]);$user=['id'=>(int)$db->lastInsertId(),'is_active'=>0];}
+  $q=$db->prepare('SELECT id,is_active,role FROM pdg_users WHERE email=? FOR UPDATE');$q->execute([$email]);$user=$q->fetch();
+  if (!$user){$q=$db->prepare("INSERT INTO pdg_users(email,password_hash,role,is_active) VALUES (?,?,'customer',0)");$q->execute([$email,password_hash($password,PASSWORD_DEFAULT)]);$user=['id'=>(int)$db->lastInsertId(),'is_active'=>0,'role'=>'customer'];}
   // Do not modify existing credentials. Pending users can request another verification message.
-  if ((int)$user['is_active']===0){
+  if ((int)$user['is_active']===0 && $user['role']==='customer'){
     $token=bin2hex(random_bytes(32));
     $q=$db->prepare('DELETE FROM pdg_email_tokens WHERE user_id=?');$q->execute([$user['id']]);
     $q=$db->prepare("INSERT INTO pdg_email_tokens(token_hash,user_id,expires_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 30 MINUTE))");$q->execute([hash('sha256',$token),$user['id']]);
