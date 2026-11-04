@@ -1,0 +1,45 @@
+name: Verify actual SuperHosting FTPS endpoint
+
+on:
+  push:
+    paths:
+      - .github/workflows/verify-superhosting-endpoint.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate DNS matches hosting IP
+        run: |
+          python3 - <<'PY'
+          import socket,sys
+          host="host-185-80-2-82.superhosting.bg"
+          ips={x[4][0] for x in socket.getaddrinfo(host,21,type=socket.SOCK_STREAM)}
+          print("Resolved IPs:",", ".join(sorted(ips)))
+          if "185.80.2.82" not in ips: sys.exit("Unexpected IP")
+          PY
+      - name: Install FTPS client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+      - name: Test secure login and list remote root (read only)
+        env:
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_USER" && test -n "$FTP_PASSWORD"
+          lftp -u "$FTP_USER","$FTP_PASSWORD" "ftp://host-185-80-2-82.superhosting.bg:21" <<'LFTP'
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate true
+          set net:max-retries 1
+          set net:timeout 15
+          set cmd:fail-exit true
+          pwd
+          cls -1
+          bye
+          LFTP
