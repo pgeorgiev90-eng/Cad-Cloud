@@ -42,3 +42,5 @@ jobs:
 # Publish MySQL catalog integration
 
 # Publish dashboard preview
+
+# Deploy automatic MySQL catalog bootstrap
