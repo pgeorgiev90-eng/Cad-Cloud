@@ -98,5 +98,337 @@
         "value": "Вълнообразна или трапецовидна ламарина"
       }
     ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X1-BOOST-5K-G4",
+    "manufacturer_code": "X1-BOOST-5K-G4",
+    "source": "https://www.solaxpower.com/our-products/x1-boost-g4.html",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "5 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "10 kWp"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "40–560 V"
+      },
+      {
+        "label": "MPPT тракери",
+        "value": "2"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      },
+      {
+        "label": "Размери (Ш × В × Д)",
+        "value": "404 × 274 × 146 мм"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X1-BOOST-6K-G4",
+    "manufacturer_code": "X1-BOOST-6K-G4",
+    "source": "https://www.solaxpower.com/our-products/x1-boost-g4.html",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "6 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "12 kWp"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "40–560 V"
+      },
+      {
+        "label": "MPPT тракери",
+        "value": "2"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      },
+      {
+        "label": "Размери (Ш × В × Д)",
+        "value": "404 × 274 × 146 мм"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-MIC-5K-G2",
+    "manufacturer_code": "X3-MIC-5K-G2",
+    "source": "https://www.solaxpower.com/our-products/x3-mic.html",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "5 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "10 kWp"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "120–980 V"
+      },
+      {
+        "label": "MPPT тракери",
+        "value": "2"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      },
+      {
+        "label": "Размери (Ш × В × Д)",
+        "value": "342 × 434 × 144.5 мм"
+      },
+      {
+        "label": "Тегло",
+        "value": "15.5 кг"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-MIC-8K-G2",
+    "manufacturer_code": "X3-MIC-8K-G2",
+    "source": "https://www.solaxpower.com/our-products/x3-mic.html",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "8 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "16 kWp"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "120–980 V"
+      },
+      {
+        "label": "MPPT тракери",
+        "value": "2"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      },
+      {
+        "label": "Размери (Ш × В × Д)",
+        "value": "342 × 434 × 156 мм"
+      },
+      {
+        "label": "Тегло",
+        "value": "17 кг"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-FTH-80K",
+    "manufacturer_code": "X3-FTH-80K",
+    "source": "https://www.solaxpower.com/uploads/file/x3-forth-datasheet-en.pdf",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "80 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "120 kWp"
+      },
+      {
+        "label": "Максимално входно PV напрежение",
+        "value": "1100 V"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "180–1000 V"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-FTH-100K",
+    "manufacturer_code": "X3-FTH-100K",
+    "source": "https://www.solaxpower.com/uploads/file/x3-forth-datasheet-en.pdf",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "100 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "150 kWp"
+      },
+      {
+        "label": "Максимално входно PV напрежение",
+        "value": "1100 V"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "180–1000 V"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-FTH-110K",
+    "manufacturer_code": "X3-FTH-110K",
+    "source": "https://www.solaxpower.com/uploads/file/x3-forth-datasheet-en.pdf",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "110 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "165 kWp"
+      },
+      {
+        "label": "Максимално входно PV напрежение",
+        "value": "1100 V"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "180–1000 V"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-FTH-120K",
+    "manufacturer_code": "X3-FTH-120K",
+    "source": "https://www.solaxpower.com/uploads/file/x3-forth-datasheet-en.pdf",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "120 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "180 kWp"
+      },
+      {
+        "label": "Максимално входно PV напрежение",
+        "value": "1100 V"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "180–1000 V"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-FTH-125K",
+    "manufacturer_code": "X3-FTH-125K",
+    "source": "https://www.solaxpower.com/uploads/file/x3-forth-datasheet-en.pdf",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "125 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "188 kWp"
+      },
+      {
+        "label": "Максимално входно PV напрежение",
+        "value": "1100 V"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "180–1000 V"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-FTH-136K-MV",
+    "manufacturer_code": "X3-FTH-136K-MV",
+    "source": "https://www.solaxpower.com/uploads/file/x3-forth-datasheet-en.pdf",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "136 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "204 kWp"
+      },
+      {
+        "label": "Максимално входно PV напрежение",
+        "value": "1100 V"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "180–1000 V"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      }
+    ]
+  },
+  {
+    "brand": "SolaX",
+    "code": "X3-FTH-150K-MV",
+    "manufacturer_code": "X3-FTH-150K-MV",
+    "source": "https://www.solaxpower.com/uploads/file/x3-forth-datasheet-en.pdf",
+    "fields": [
+      {
+        "label": "Номинална AC мощност",
+        "value": "150 kW"
+      },
+      {
+        "label": "Максимална препоръчителна PV мощност",
+        "value": "225 kWp"
+      },
+      {
+        "label": "Максимално входно PV напрежение",
+        "value": "1100 V"
+      },
+      {
+        "label": "MPPT диапазон",
+        "value": "180–1000 V"
+      },
+      {
+        "label": "Защита",
+        "value": "IP66"
+      }
+    ]
   }
 ]
