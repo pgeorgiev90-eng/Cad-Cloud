@@ -30,6 +30,6 @@ try {
       }
     }
   }
-  $rows=$pdo->query('SELECT brand, category, code, name, price, image_url AS imageUrl, image_index AS imageIndex FROM products WHERE active=1 ORDER BY id')->fetchAll();
+  $rows=$pdo->query('SELECT id, brand, category, code, name, price, image_url AS imageUrl, image_index AS imageIndex FROM products WHERE active=1 ORDER BY id')->fetchAll();
   echo json_encode(['products'=>$rows],JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);
 } catch (Throwable $e) { http_response_code(503); echo json_encode(['error'=>'catalog_unavailable']); }
