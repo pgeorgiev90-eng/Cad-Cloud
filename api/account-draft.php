@@ -1,10 +1,5 @@
 <?php
 declare(strict_types=1);
-// Locked pending full security testing and administrator provisioning.
-http_response_code(503);
-header('Content-Type: application/json; charset=utf-8');
-echo '{"error":"account_service_not_enabled"}';
-exit;
 // Draft: not connected to public forms or deployed. Requires security review and migrations.
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -25,7 +20,15 @@ session_start();
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(32));
 $action = $_GET['action'] ?? 'session';
 if ($action === 'session' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-    respond(200, ['csrf'=>$_SESSION['csrf'], 'user'=>$_SESSION['user'] ?? null]);
+    $registrationAvailable = false;
+    try {
+        $file = dirname(__DIR__, 2) . '/pdg-shop-db.php';
+        if (is_file($file)) {
+            $cfg = require $file;
+            $registrationAvailable = is_array($cfg) && ($cfg['registration_enabled'] ?? false) === true;
+        }
+    } catch (Throwable $e) { $registrationAvailable = false; }
+    respond(200, ['csrf'=>$_SESSION['csrf'], 'user'=>$_SESSION['user'] ?? null, 'registration_available'=>$registrationAvailable]);
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') respond(405, ['error'=>'method_not_allowed']);
 $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
