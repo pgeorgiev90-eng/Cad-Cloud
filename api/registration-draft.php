@@ -48,6 +48,7 @@ try {
   if (!$user){$q=$db->prepare("INSERT INTO pdg_users(email,password_hash,role,is_active) VALUES (?,?,'customer',0)");$q->execute([$email,password_hash($password,PASSWORD_DEFAULT)]);$user=['id'=>(int)$db->lastInsertId(),'is_active'=>0,'role'=>'customer'];}
   // Do not modify existing credentials. Pending users can request another verification message.
   if ((int)$user['is_active']===0 && $user['role']==='customer'){
+    $q=$db->prepare('UPDATE pdg_users SET password_hash=? WHERE id=? AND is_active=0 AND role=\'customer\'');$q->execute([password_hash($password,PASSWORD_DEFAULT),$user['id']]);
     $token=bin2hex(random_bytes(32));
     $q=$db->prepare('DELETE FROM pdg_email_tokens WHERE user_id=?');$q->execute([$user['id']]);
     $q=$db->prepare("INSERT INTO pdg_email_tokens(token_hash,user_id,expires_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 30 MINUTE))");$q->execute([hash('sha256',$token),$user['id']]);
