@@ -1,0 +1,22 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {electrical,stringPlan}=require('../solar-offer-core.js');
+const one=electrical([{label:'Брой фази',value:'1'}]);
+const three=electrical([{label:'Phases',value:'Three-phase'}]);
+assert.equal(one.limit,400);assert.equal(three.limit,750);
+assert.equal(electrical([{label:'Брой фази',value:'3'},{label:'Максимално DC напрежение (V)',value:'600 V'}]).limit,600);
+assert.equal(electrical([{label:'Брой фази',value:'3'},{label:'Max DC voltage',value:'1.1 kV'}]).limit,750);
+assert.equal(electrical([{label:'Брой фази',value:'1'},{label:'String voltage limit',value:'350'}]).limit,350);
+for(const fields of [[],[{label:'Брой фази',value:'unknown'}],[{label:'Брой фази',value:'1'},{label:'Phases',value:'3'}],[{label:'Брой фази',value:'3'},{label:'Max DC voltage',value:'600/1000'}]])assert.equal(electrical(fields).limit,null);
+const planes=[{panels:Array.from({length:20},()=>({model:'jinko440',power:440,voc:39.57}))}];
+const p1=stringPlan(planes,one,-20),p3=stringPlan(planes,three,-20);
+assert.equal(p1.rows[0].maxPanels,9);assert.equal(p3.rows[0].maxPanels,17);
+assert.deepEqual(p1.rows[0].strings,[7,7,6]);assert.equal(p1.rows[0].strings.reduce((s,n)=>s+n,0),20);
+assert.equal(p1.rows[0].coldVoc,39.57*(1+0.0025*45));
+for(const plan of [p1,p3])for(const row of plan.rows){assert.ok(row.maxPanels*row.coldVoc<=plan.limit);assert.ok((row.maxPanels+1)*row.coldVoc>plan.limit);for(const n of row.strings)assert.ok(n*row.coldVoc<=plan.limit);}
+const boundary=stringPlan([{panels:[{power:550,voc:40,vocCoefficient:-.25}]}],one,25);assert.equal(boundary.rows[0].maxPanels,10);
+assert.equal(stringPlan(planes,one,'').valid,false);
+assert.equal(stringPlan([{panels:[{power:550}]}],one,-20).valid,false);
+assert.equal(stringPlan([{panels:[{power:550,voc:40,vocCoefficient:0.25}]}],one,-20).valid,false);
+assert.equal(stringPlan(planes,electrical([]),-20).valid,false);
+console.log('PASS: product phase parsing, strict 400/750 V caps, lower product caps, cold Voc, exact boundaries, complete string partition and missing-data handling');

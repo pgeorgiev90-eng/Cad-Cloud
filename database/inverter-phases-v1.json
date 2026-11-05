@@ -1,0 +1,227 @@
+[
+  {
+    "name": "X1-BOOST-5K-G4",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X1-BOOST-6K-G4",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X1-VAST-5K",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-VAST-6K",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-VAST-8K",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-VAST-10K",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-HYB-5.0-LV",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-HYB-6.0-LV",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-Lite-8K-LV",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-Lite-10K-LV",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X1-Lite-12K-LV",
+    "phases": 1,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-MIC-5K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-MIC-8K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-PRO-20K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-PRO-25K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-PRO-30K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-MGA-40K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-MGA-50K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-MGA-60K-G2",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-FTH-80K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-FTH-100K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-FTH-110K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-FTH-120K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-FTH-125K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-FTH-136K-MV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-FTH-150K-MV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-GRD-300K-HV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-GRD-320K-HV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-GRD-333K-HV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-GRD-350K-HV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/string-inverters.html"
+  },
+  {
+    "name": "X3-HYB-8.0-P",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-HYB-10.0-P",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-HYB-12.0-P",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-HYB-15.0-P",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-ULT-15K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-ULT-15KP",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-ULT-20KP",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-ULT-20K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-ULT-25K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-ULT-30K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-AELIO-50K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-AELIO-60K",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-NEO-10K-LV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-NEO-12K-LV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  },
+  {
+    "name": "X3-NEO-15K-LV",
+    "phases": 3,
+    "source": "https://www.solaxpower.com/our-products.html"
+  }
+]

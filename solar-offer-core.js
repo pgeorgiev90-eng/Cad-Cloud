@@ -20,5 +20,60 @@
     const subtotal=rows.reduce((s,r)=>s+(r.total||0),0),vat=Math.round(subtotal*.2);
     return {rows,complete:rows.every(r=>r.total!==null),subtotal,vat,total:subtotal+vat};
   }
-  const api={project,price,costs};if(typeof module==='object'&&module.exports)module.exports=api;else root.PDGSolarOfferCore=api;
+  const normalize=value=>String(value).toLowerCase().normalize('NFKC').replace(/[()[\]_.:/–—-]+/g,' ').replace(/\s+/g,' ').trim();
+  function phaseValue(value){
+    const s=normalize(value);
+    if(/^(1|1 ф|1ф|1 фаза|1 phase|single phase|single|монофазен|монофазно|еднофазен|еднофазно)$/.test(s))return 1;
+    if(/^(3|3 ф|3ф|3 фази|3 phase|three phase|three|трифазен|трифазно)$/.test(s))return 3;
+    return null;
+  }
+  function positiveValue(value){
+    const s=String(value).trim().replace(/\s/g,'').replace(',','.');
+    const m=s.match(/^(\d+(?:\.\d+)?)(v|volt|volts|в|kv|кв)?$/i);
+    if(!m)return null;const n=Number(m[1])*(/^(kv|кв)$/i.test(m[2]||'')?1000:1);return Number.isFinite(n)&&n>0?n:null;
+  }
+  function electrical(fields){
+    const phaseLabels=['брой фази','фазност','фази','phase','phases','number of phases','ac phases'];
+    const maxLabels=['максимално dc напрежение v','максимално dc напрежение','макс dc напрежение v','максимално входно dc напрежение v','максимално входно напрежение v','max dc voltage','max dc voltage v','max dc input voltage','maximum dc voltage','maximum input voltage','max input voltage','max input voltage v'];
+    const capLabels=['лимит напрежение на стринг v','лимит напрежение на стринг','string voltage limit v','string voltage limit'];
+    const phaseEntries=fields.filter(f=>phaseLabels.includes(normalize(f.label))),phases=phaseEntries.map(f=>phaseValue(f.value));
+    const errors=[];let phase=null;
+    if(!phases.length)errors.push('Липсва характеристика „Брой фази“ на инвертора.');
+    else if(phases.some(p=>p===null)||new Set(phases).size!==1)errors.push('Нееднозначна или невалидна фазност на инвертора.');
+    else phase=phases[0];
+    const voltageFields=fields.filter(f=>maxLabels.includes(normalize(f.label))||capLabels.includes(normalize(f.label)));
+    const voltages=voltageFields.map(f=>positiveValue(f.value));
+    if(voltages.some(v=>v===null))errors.push('Невалидна характеристика за максимално DC напрежение.');
+    const policyLimit=phase===1?400:phase===3?750:null;
+    const limit=policyLimit&&errors.length===0?Math.min(policyLimit,...voltages):null;
+    return {phase,policyLimit,limit,errors};
+  }
+  const knownModules={jinko440:{voc:39.57,coefficient:-0.25},longi435:{voc:39.33,coefficient:-0.23}};
+  function panelElectrical(panel){
+    const known=knownModules[panel.model];
+    const voc=panel.voc==null?known?.voc:Number(panel.voc);
+    const coefficient=panel.vocCoefficient==null?known?.coefficient:Number(panel.vocCoefficient);
+    return {voc,coefficient};
+  }
+  function stringPlan(planes,spec,minTemperature){
+    if(!spec?.limit)return {valid:false,errors:spec?.errors?.length?spec.errors:['Изберете каталожен инвертор с попълнена фазност.'],rows:[]};
+    const temperature=Number(minTemperature);if(minTemperature===''||minTemperature==null||!Number.isFinite(temperature)||temperature< -50||temperature>25)return {valid:false,errors:['Задайте минимална проектна температура между −50 и 25°C.'],rows:[]};
+    const rows=[],errors=[];
+    planes.forEach((roof,i)=>{
+      const groups=new Map();for(const panel of roof.panels){const e=panelElectrical(panel),key=JSON.stringify([panel.model||'custom',panel.power,e.voc,e.coefficient]);const g=groups.get(key)||{model:panel.model||'custom',power:panel.power,voc:e.voc,coefficient:e.coefficient,count:0};g.count++;groups.set(key,g);}
+      for(const g of groups.values()){
+        if(!(Number.isFinite(g.voc)&&g.voc>0&&Number.isFinite(g.coefficient)&&g.coefficient<0&&g.coefficient>= -1)){
+          errors.push('Скат '+(i+1)+': липсва валидно Voc или температурен коефициент на панелите.');continue;
+        }
+        const coldVoc=g.voc*(1+g.coefficient/100*(temperature-25));
+        let maxPanels=Math.floor(spec.limit/coldVoc);while(maxPanels>0&&maxPanels*coldVoc>spec.limit)maxPanels--;
+        if(maxPanels<1){errors.push('Скат '+(i+1)+': дори един панел надвишава лимита.');continue;}
+        const count=Math.ceil(g.count/maxPanels),base=Math.floor(g.count/count),extra=g.count%count;
+        const strings=Array.from({length:count},(_,j)=>base+(j<extra?1:0));
+        rows.push({...g,roof:i+1,coldVoc,maxPanels,strings,maxStringVoltage:Math.max(...strings)*coldVoc});
+      }
+    });
+    return {valid:errors.length===0&&rows.length>0,errors,rows,limit:spec.limit,policyLimit:spec.policyLimit,phase:spec.phase,temperature};
+  }
+  const api={project,price,costs,electrical,stringPlan,panelElectrical};if(typeof module==='object'&&module.exports)module.exports=api;else root.PDGSolarOfferCore=api;
 })(typeof window==='object'?window:globalThis);

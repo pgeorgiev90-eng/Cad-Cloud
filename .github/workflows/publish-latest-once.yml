@@ -12,12 +12,27 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: pdg_migration_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-only-password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - uses: actions/checkout@v4
       - name: Verify solar quote calculations and PHP syntax
         run: |
           node --check solar-offer.js
           node tests/solar_offer_test.js
+          node tests/solar_string_test.js
+          php -l api/product-phase-bootstrap.php
+          php -l api/products.php
+          php tests/phase_migration.php
           php -l api/solar-yield.php
       - name: Validate credentials
         env:
@@ -69,3 +84,5 @@ jobs:
 # Publish mobile dropdown navigation
 
 # Publish Solar CAD inverter selection and project offers
+
+# Publish product-driven string voltage constraints

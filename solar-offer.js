@@ -1,26 +1,49 @@
 (() => {
   'use strict';
   const $=id=>document.getElementById(id),core=window.PDGSolarOfferCore;
-  const ids=['client','site','inverterName','inverterKw','inverterQty','inverterPrice','panelPrice','mountPrice','installPrice','loss','yieldMode','manualYield'];
-  let products=[],generation=0,ready=false;
+  const ids=['client','site','inverter','inverterName','inverterKw','inverterQty','inverterPrice','panelPrice','mountPrice','installPrice','loss','yieldMode','manualYield','minTemperature'];
+  let products=[],generation=0,ready=false,electricalSpec=null,specSequence=0,restoredProduct='';
   const field=id=>$('offer-'+id);
   function settings(){const data={};for(const id of ids)data[id]=field(id).value;return data;}
-  function restore(data){if(!data||typeof data!=='object')return;for(const id of ids)if(typeof data[id]==='string')field(id).value=data[id].slice(0,500);invalidate();}
+  function restore(data){if(!data||typeof data!=='object')return;for(const id of ids)if(typeof data[id]==='string')field(id).value=data[id].slice(0,500);restoredProduct=typeof data.inverter==='string'?data.inverter:'';if(products.length&&restoredProduct){field('inverter').value=restoredProduct;loadElectrical(false);}else{electricalSpec=null;specSequence++;field('inverterName').readOnly=false;}invalidate();}
   window.PDGSolarOffer={settings,restore};
-  function invalidate(){generation++;ready=false;$('offer-print').disabled=$('offer-download').disabled=true;if($('solarOfferDialog').open)$('offer-progress').textContent='Проектът е променен. Затворете офертата и я генерирайте отново.';}
+  function invalidate(){generation++;ready=false;$('offer-print').disabled=$('offer-download').disabled=true;if($('solarOfferDialog').open)$('offer-progress').textContent='Проектът е променен. Затворете офертата и я генерирайте отново.';previewStrings();}
+  function previewStrings(){
+    const box=$('offer-string-status');if(!box||!window.PDGSolarProject)return;
+    const plan=core.stringPlan(window.PDGSolarProject.snapshot(),electricalSpec,field('minTemperature').value);
+    box.replaceChildren();
+    if(!electricalSpec?.limit){box.textContent=electricalSpec?.errors?.join(' ')||'Изберете каталожен инвертор с характеристика „Брой фази“. За ръчно въведен модел няма автоматично потвърден лимит.';return;}
+    box.append(text('p',(electricalSpec.phase===1?'Монофазен':'Трифазен')+' инвертор · лимит '+electricalSpec.limit+' V на стринг (правило PDG: '+electricalSpec.policyLimit+' V).'));
+    for(const r of plan.rows)box.append(text('p','Скат '+r.roof+' · '+r.power+' Wp: максимум '+r.maxPanels+' панела в серия, Voc при '+plan.temperature+'°C = '+number(r.coldVoc,2)+' V/панел. Предложение: '+r.strings.join(' + ')+' панела в отделни стрингове.'));
+    for(const error of plan.errors)box.append(text('p',error));
+    if(!plan.rows.length&&!plan.errors.length)box.append(text('p','Поставете панели с попълнени Voc и температурен коефициент.'));
+    box.append(text('p','Ограничение по максимално напрежение. Броят MPPT/входове, токовете и минималното работно напрежение изискват отделна проверка.'));
+  }
+  async function loadElectrical(setValues=true){
+    const p=products.find(p=>String(p.id)===field('inverter').value),sequence=++specSequence;electricalSpec=null;
+    field('inverterName').readOnly=Boolean(p);
+    if(!p){invalidate();return;}
+    field('inverterName').value=p.name;
+    if(setValues){field('inverterPrice').value=p.price??'';field('inverterKw').value='';}
+    $('offer-inverter-status').textContent='Зареждане на характеристиките на '+p.name+'…';invalidate();
+    try{
+      const r=await fetch('api/product-details.php?id='+encodeURIComponent(p.id),{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();
+      if(sequence!==specSequence||String(p.id)!==field('inverter').value)return;
+      electricalSpec=core.electrical(data.fields);electricalSpec.productId=Number(p.id);
+      $('offer-inverter-status').textContent=electricalSpec.errors.length?electricalSpec.errors.join(' '):'Фазността и DC лимитът са прочетени от характеристиките на артикула. Потвърдете номиналната AC мощност.';
+    }catch(e){if(sequence!==specSequence)return;electricalSpec={errors:['Характеристиките на инвертора не могат да се заредят.']};$('offer-inverter-status').textContent=electricalSpec.errors[0];}
+    invalidate();
+  }
   window.addEventListener('pdg-solar-change',invalidate);
   $('solar-offer-settings').addEventListener('input',invalidate);
   $('solar-offer-settings').addEventListener('change',invalidate);
   $('offer-apply-tilt').onclick=()=>{const input=$('offer-roof-tilt');if(!input.reportValidity())return;const module=$('offer-module-tilt');if(!module.reportValidity())return;window.PDGSolarProject.setTilt(Number(input.value),module.value===''?null:Number(module.value));};
-  $('offer-inverter').onchange=()=>{
-    const p=products.find(p=>String(p.id)===$('offer-inverter').value);if(!p)return;
-    field('inverterName').value=p.name;field('inverterPrice').value=p.price??'';field('inverterKw').value='';
-    $('offer-inverter-status').textContent='Избран е '+p.name+'. Въведете номиналната AC мощност от техническия лист.';invalidate();
-  };
+  $('offer-inverter').onchange=()=>loadElectrical(true);
   fetch('api/products.php',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(d=>{
     products=d.products.filter(p=>/инвертор|inverter/i.test(p.category));
     for(const p of products){const o=new Option(p.brand+' · '+p.name,p.id);$('offer-inverter').add(o);}
     $('offer-inverter-status').textContent=products.length+' инвертора от магазина. Може да въведете и друг модел.';
+    if(restoredProduct){field('inverter').value=restoredProduct;loadElectrical(false);}
   }).catch(()=>{$('offer-inverter-status').textContent='Каталогът временно не се зарежда. Може да въведете модела и цената ръчно.';});
   const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;};
   const number=(v,d=1)=>Number(v).toLocaleString('bg-BG',{maximumFractionDigits:d});
@@ -33,8 +56,10 @@
     try{const r=await fetch('api/solar-yield.php?'+params,{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error();const d=await r.json();if(!(d.annual_kwh_per_kwp>0))throw Error();return {...d,kwh:d.annual_kwh_per_kwp*roof.kwp};}finally{clearTimeout(timer);}
   }
   $('offer-generate').onclick=async()=>{
+    // Re-read product characteristics so administrative edits cannot leave stale voltage limits.
+    const generate=$('offer-generate');if(generate.disabled)return;generate.disabled=true;try{if(field('inverter').value)await loadElectrical(false);}finally{generate.disabled=false;}
     const controls=[...$('solar-offer-settings').querySelectorAll('input')];if(controls.some(e=>!e.reportValidity()))return;
-    let summary,prices,s;
+    let summary,prices,s,strings;
     try{
       s=settings();summary=core.project(window.PDGSolarProject.snapshot());
       if(!summary.count)throw Error('Поставете панели в проекта, преди да генерирате оферта.');
@@ -42,6 +67,7 @@
       if(s.yieldMode==='manual'&&!(Number(s.manualYield)>0))throw Error('Въведете специфичен годишен добив за ръчната оценка.');
       if(summary.roofs.filter(r=>r.count).length>20)throw Error('Офертата поддържа до 20 ската с панели.');
       prices=core.costs(summary,s);
+      strings=core.stringPlan(window.PDGSolarProject.snapshot(),electricalSpec,s.minTemperature);
     }catch(e){$('offer-inverter-status').textContent=e.message;return;}
     const run=++generation;ready=false;$('offer-print').disabled=$('offer-download').disabled=true;
     const dialog=$('solarOfferDialog'),report=$('solar-offer-report');report.replaceChildren();dialog.showModal();
@@ -51,6 +77,12 @@
     report.append(text('p',summary.count+' панела · '+number(summary.kwp,2)+' kWp DC · '+s.inverterQty+' × '+s.inverterName,'offer-summary'));
     report.append(text('h2','Панели и инвертор'),table(['Компонент','Брой','Мощност'],[...summary.groups.map(g=>[modelName(g),String(g.count),number(g.count*g.power/1000,2)+' kWp']),[s.inverterName,s.inverterQty,number(s.inverterKw,2)+' kW AC / бр.']]));
     report.append(text('p','Обща AC мощност: '+number(Number(s.inverterKw)*Number(s.inverterQty),2)+' kW. Съотношение DC/AC: '+number(summary.kwp/(Number(s.inverterKw)*Number(s.inverterQty)),2)+'. Изборът на инвертор подлежи на проверка на стрингове, напрежения и токове по техническия лист.','offer-fine'));
+    report.append(text('h2','Ограничение на напрежението и стрингове'));
+    if(electricalSpec?.limit)report.append(text('p',(electricalSpec.phase===1?'Монофазен':'Трифазен')+' инвертор. Лимит PDG: '+electricalSpec.policyLimit+' V; приложен лимит: '+electricalSpec.limit+' V/стринг. Фазност и допълнителни ограничения: характеристики на артикул №'+electricalSpec.productId+'.'));
+    if(strings.rows.length)report.append(table(['Скат / панел','Voc при студ','Макс. панели в серия','Предложени стрингове'],strings.rows.map(r=>['Скат '+r.roof+' / '+r.power+' Wp',number(r.coldVoc,2)+' V при '+strings.temperature+'°C',String(r.maxPanels),r.strings.join(' + ')+' панела; най-високо Voc '+number(r.maxStringVoltage,2)+' V'])));
+    for(const error of strings.errors)report.append(text('p',error,'offer-pending'));
+    if(!strings.valid)report.append(text('p','Проверката на стринговете е непълна. Не е потвърдена електрическа конфигурация.','offer-pending'));
+    report.append(text('p','Voc(T) = Voc(STC) × [1 + βVoc/100 × (Tmin − 25°C)]. Ограниченията 400/750 V са проектно правило на PDG, а не максималното напрежение, обявено от производителя. При по-нисък продуктов DC лимит се използва той. Това е предварително разделяне по горна граница на напрежението; не назначава MPPT/входове и не проверява минимални MPPT напрежения, токове или паралелни стрингове. Броят инвертори не увеличава допустимото напрежение на стринг.','offer-fine'));
     report.append(text('h2','Покрив, конструкция и ъгли'),table(['Скат','Панели / kWp','Конструкция','Покрив / панели / азимут'],summary.roofs.map(r=>['Скат '+r.number,r.count+' / '+number(r.kwp,2),r.mounting,r.tilt+'° / '+r.moduleTilt+'° / '+r.azimuth+'°'])));
     report.append(text('p','Наклонът е спрямо хоризонталата. 10° е начална стойност за нов скат и трябва да се съобрази с реалния покрив. Ъгълът на панелите е спрямо хоризонталата; при липса на отделна стойност следва покрива. Азимут: 0° север, 90° изток, 180° юг, 270° запад. Отделният ъгъл на панелите се използва за добива; визуализацията и запълването не моделират повдигането и засенчването между редовете.','offer-fine'));
     if(summary.roofs.some(r=>r.count&&r.mounting==='Не е избрана'))report.append(text('p','За част от скатовете няма избрана конструкция. Запазете конструкцията за всеки скат преди окончателната оферта.','offer-pending'));
