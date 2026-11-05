@@ -19,7 +19,7 @@ assert request(v,'api/admin-electric.php')[0]==401
 assert request(c,'api/admin-electric.php')[0]==403
 assert request(c,'api/admin-electric.php',{'action':'labour','id':1,'price':'1'},customer_csrf)[0]==403
 status,data=request(v,'api/electric-catalog.php?q=BM617116');assert status==200 and data['labour_included'] is False
-p=next(p for p in data['products'] if p['sku']=='BM617116--');assert p['ean']=='9004840395877' and p['widthMm']==17.8 and p['unitPrice'] is None
+p=next(p for p in data['products'] if p['sku']=='BM617116--');assert p['ean']=='9004840395877' and p['widthMm']==17.8 and p['unitPrice']==3.76 and p['priceSource']=='schrack_2026_06'
 assert request(a,'api/admin-electric.php',{'action':'price','sku':p['sku'],'price':'7.50'})[0]==403
 for payload in [{'action':'price','sku':p['sku'],'price':'7.50'},{'action':'price','sku':'WSA8060260','price':'130.00'},{'action':'rate','width':'20','thickness':'5','price':'25.00'}]:assert request(a,'api/admin-electric.php',payload,csrf)[0]==200
 status,data=request(v,'api/electric-catalog.php?q=9004840395877');assert status==200 and data['products'][0]['unitPrice']==7.5
