@@ -82,8 +82,16 @@ jobs:
               except Exception:
                   if attempt==19: raise
                   time.sleep(.5)
-          assert len(data['products'])==204
-          assert all(p.get('description') for p in data['products'])
+          from pathlib import Path
+          original=[p for p in data['products'] if p['brand']!='Schrack Technik']
+          schrack=[p for p in data['products'] if p['brand']=='Schrack Technik']
+          expected=json.loads(Path('database/schrack-shop-catalog.json').read_text())
+          assert len(original)==204 and all(p.get('description') for p in original)
+          assert len(schrack)==len(expected)
+          assert {p['code']:p['price'] for p in schrack}=={p['code']:p['price'] for p in expected}
+          assert all(p['category'].startswith('Електроапаратура / ') for p in schrack)
+          repeated=json.load(urllib.request.urlopen('http://127.0.0.1:8094/api/products.php',timeout=10))
+          assert len(repeated['products'])==len(data['products'])
           assert sum(bool(p.get('imageUrl')) for p in data['products']) >= 45
           product=next(p for p in data['products'] if p['name']=='X1-BOOST-5K-G4')
           details=json.load(urllib.request.urlopen('http://127.0.0.1:8094/api/product-details.php?id='+str(product['id']),timeout=10))
@@ -107,7 +115,7 @@ jobs:
         run: |
           import ftplib, ssl, os, io
           from pathlib import Path
-          files = ['database/electric-cad-schema.sql', 'database/electrical-catalog.json', 'database/electrical-source-index.json', 'database/electrical-reference-prices.json', 'assets/electric-cabinet-render.webp', 'api/electric-common.php', 'api/electric-catalog.php', 'api/electric-enquiries.php', 'api/admin-electric.php', 'electrical-busbar-core.js', 'electrical-busbar.js', 'electrical-cad-design.css', 'electrical-cad-design.js', 'electrical-catalog.js', 'electrical-quote-core.js', 'electrical-quote.js', 'admin-electric.js', 'admin-electric.html', 'admin-dashboard.html', 'electrical-cad.html']
+          files = ['database/schrack-shop-catalog.json', 'api/schrack-shop-bootstrap.php', 'api/products.php', 'catalog-sections.js', 'catalog.html', 'shop.html']
           with ftplib.FTP_TLS(context=ssl.create_default_context(),timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'],21)
               ftp.login(os.environ['FTP_USER'],os.environ['FTP_PASSWORD'])
@@ -125,7 +133,7 @@ jobs:
                   ftp.rename(path+'.pdg-upload',path)
                   print('Published:',path,flush=True)
 
-      - name: Verify deployed Electric CAD and public catalog
+      - name: Verify deployed Schrack shop categories
         shell: python
         run: |
           import hashlib, json, time, urllib.request, urllib.error
@@ -135,19 +143,16 @@ jobs:
           def get(path):
               url=root+path+('&' if '?' in path else '?')+'release='+version
               return urllib.request.urlopen(url,timeout=40).read()
-          for path in ['electrical-cad.html','electrical-catalog.js','electrical-quote.js','admin-electric.html','assets/electric-cabinet-render.webp']:
+          for path in ['shop.html','catalog.html','catalog-sections.js']:
               assert hashlib.sha256(get(path)).digest()==hashlib.sha256(Path(path).read_bytes()).digest(),path
-          catalog=json.loads(get('api/electric-catalog.php?q=BM617116'))
-          assert catalog['labour_included'] is False
-          assert any(p['sku']=='BM617116--' and p['widthMm']==17.8 and p['imageUrl'] and p['unitPrice'] is not None for p in catalog['products'])
-          assert any(float(r['width_mm'])==20 and float(r['thickness_mm'])==5 for r in catalog['busbarRates'])
-          try:
-              get('api/admin-electric.php')
-          except urllib.error.HTTPError as e:
-              assert e.code==401, e.code
-          else:
-              raise AssertionError('Admin endpoint is accessible anonymously')
-          print('Verified live CAD, catalogue migration, product data and admin access control.')
+          products=json.loads(get('api/products.php'))['products']
+          live={p['code']:p for p in products if p['brand']=='Schrack Technik'}
+          expected=json.loads(Path('database/schrack-shop-catalog.json').read_text())
+          for p in expected:
+              assert live[p['code']]['category']==p['category'],p['code']
+          assert any(p.get('price') and float(p['price'])>0 for p in live.values())
+          print('Verified live Schrack category assignment for',len(expected),'products.')
+
 
 # Publish MySQL catalog integration
 

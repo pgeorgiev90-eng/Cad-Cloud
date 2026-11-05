@@ -4,7 +4,7 @@
   inverters:'Инвертори',batteries:'Батерии',mounting:'Конструкции и крепежи',
   bms:'BMS модули',battery_accessories:'Аксесоари за батерии',storage:'Системи за съхранение',
   chargers:'Зарядни станции',energy_management:'Енергийно управление',system_cabinets:'Системни шкафове',
-  panels:'Фотоволтаични панели',protection:'Защити и апаратура',enclosures:'Табла и кутии',accessories:'Кабели и аксесоари'
+  panels:'Фотоволтаични панели',electrical:'Електроапаратура',protection:'Защити и апаратура',enclosures:'Табла и кутии',accessories:'Кабели и аксесоари'
  };
  const batteryNames=new Set(['TB-HS51','TB-HR76','TB-HR140','HS160-PA','TB-LD16']);
  const bmsNames=new Set(['TBMS-MCS0800','TBMS-S8-1','TBMS-R76','TBMS-R15','HS160-BA']);
@@ -21,6 +21,7 @@
   if(c==='системни шкафове')return 'system_cabinets';
   if(['мини рейл','ламарина','керемида','баласт','наземен','ограда'].includes(c)||c.startsWith('паркинг'))return 'mounting';
   if(c==='фотоволтаични панели')return 'panels';
+  if(c.startsWith('електроапаратура / '))return 'electrical';
   if(c==='защити и апаратура')return 'protection';
   if(c==='табла и кутии')return 'enclosures';
   if(c==='кабели и аксесоари')return 'accessories';
