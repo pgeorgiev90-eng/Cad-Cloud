@@ -1,0 +1,77 @@
+/* Shared PDG Systems daylight palette. Loaded after each page's layout styles. */
+:root{color-scheme:light;--bg:#f5f8fa;--panel:#fff;--card:#fff;--text:#183348;--muted:#526a7b;--line:#d7e3e9;--mint:#087f6b}
+body{background:#f5f8fa;color:#183348}
+header,.top{background:#ffffffed;border-color:#d7e3e9;box-shadow:0 2px 14px #18334806}
+header a,.nav,nav{color:#294d62}
+header a:hover,.nav a:hover,nav a:hover{color:#087f6b}
+a{color:#087f6b}
+h1,h2,h3,h4{color:#183348}
+.muted,.lead,.note,.hint,.small,.code,.photo-caption,.empty,.heading p,.hero p,.card p,.body p,.product p,.about p,.contact p,.stat p,footer,.brand small,.chart-note,.stat-status,.chart-scale,.bar-name{color:#526a7b}
+.eyebrow,.tag,.crumb,.status,.flowstep strong,.plan .price,.price{color:#087f6b}
+.card,.panel,.tool,.product,.plan,.flowstep,.box,.chart,.metric,.cart-row,.order-success,.image-panel,.contact form{background:#fff;border-color:#d7e3e9;box-shadow:0 6px 24px #19394e06}
+.card:hover{border-color:#8abeb3}
+.band{background:#eaf3f5;border-color:#d7e3e9}
+.notice,.banner{background:#e8f5ef;border-color:#bfddd3;color:#31584f}
+.banner h2,.banner p{color:#244b45}
+.hero{background:radial-gradient(ellipse at 85% 15%,#d7f0e5 0,transparent 55%),linear-gradient(115deg,#eaf4f7,#f8fbfc)}
+.badge{background:#e1f3e9;border-color:#b5dccc;color:#17634e}
+.art{background:linear-gradient(135deg,#e6f4f0,#edf4f8)}
+.art span,.icon{color:#087f6b}.icon{border-color:#9ccabc;background:#ffffffa0}
+input,textarea,select,.search,.filter{background:#fff;color:#183348;border-color:#b9cdd7}
+input::placeholder,textarea::placeholder{color:#687f8e;opacity:1}
+label,.contact label{color:#37566a}
+input:focus,textarea:focus,select:focus{border-color:#087f6b;outline:3px solid #087f6b22;outline-offset:1px}
+button,.btn,.button,.more{background:#087f6b;border-color:#087f6b;color:#fff}
+button:hover,.btn:hover,.button:hover,.more:hover{background:#066b5a;color:#fff}
+.btn.primary,.primary{background:#087f6b;border-color:#087f6b;color:#fff}
+button.secondary,.btn.outline,.filter{background:#fff;color:#294d62;border-color:#b9cdd7}
+button.secondary:hover,.btn.outline:hover,.filter:hover{background:#edf5f4;color:#155e50}
+.filter[aria-pressed=true],.cart-link [data-cart-count]{background:#087f6b;color:#fff;border-color:#087f6b}
+.cart-link{border-color:#b9d8cf;color:#17634e;background:#f2faf6}
+.quantity-controls input{background:#fff;color:#183348}
+.order-list button{background:#fff;color:#183348;border-color:#c6d8e0}
+.order-list .selected{border-color:#087f6b;background:#ecf8f2}
+.sum-line:nth-child(3),.order-item,td,th{border-color:#d7e3e9}
+th{color:#466376}
+.metric span{color:#526a7b}.metric b{color:#087f6b}
+.bar-track{background:#e2ecef}.bar-fill{background:#0c947b}
+.store-toast{background:#e2f5eb;border-color:#8ac9b0;color:#1c5744;box-shadow:0 8px 30px #18334820}
+footer{background:#edf3f6;border-color:#d7e3e9}
+/* Bright photography with a pale overlay keeps the home-page text readable. */
+.slide img{filter:brightness(1.04) saturate(.86)}
+.slide:after{background:linear-gradient(90deg,#f2f8fcf5 0%,#f2f8fce8 38%,#f2f8fc80 66%,#f2f8fc12 100%)}
+.slide h1{color:#14344a}.slide p{color:#36576b}.slide .eyebrow{color:#087461}
+.sliderNav button{background:#526e7c55}.sliderNav button.active{background:#087f6b}
+@media(max-width:580px){.slide:after{background:linear-gradient(90deg,#f2f8fcf2,#f2f8fcc9 65%,#f2f8fc80)}}
+/* CAD controls share the palette; drawings and map layers retain their colors. */
+aside,.toolbar{background:#edf3f6;color:#183348;border-color:#d7e3e9}
+aside h3,aside label{color:#294d62}
+aside .note,aside .hint,#status{color:#526a7b}
+#selection{background:#e2ecef;color:#183348}
+.palette button{background:#fff;color:#294d62;border-color:#bfced7}
+.palette button:hover{background:#dcefe9;border-color:#087f6b}
+.roof-choice{background:#fff;color:#294d62;border-color:#bfced7}
+.roof-choice.chosen{background:#def3e8;color:#17634e;border-color:#087f6b}
+.roof-step,.legend{background:#fff;color:#294d62;border-color:#bfced7}
+.stats .stat,.stat{border-color:#087f6b}
+/* Help panel styles are injected by the guide at runtime. */
+#pdg-help{color:#183348!important}
+#pdg-launch{background:#087f6b!important;color:#fff!important;box-shadow:0 7px 24px #143a3526!important}
+#pdg-panel{background:#fff!important;border-color:#c6dcd5!important;box-shadow:0 18px 55px #18334826!important}
+#pdg-head{background:#e6f4ed!important;color:#183348!important}
+#pdg-head small,#pdg-foot{color:#526a7b!important}
+#pdg-close{color:#294d62!important}
+#pdg-msg{background:#f0f6f8!important;color:#294d62!important}
+#pdg-menu button,#pdg-lang{background:#fff!important;color:#294d62!important;border-color:#bfd5d9!important}
+#pdg-menu button:hover{background:#e9f5ee!important;border-color:#087f6b!important}
+#pdg-actions a{color:#087f6b!important}#pdg-foot{border-color:#d7e3e9!important}
+
+p{color:inherit!important}.plan ul{color:#466376!important}
+.contact input,.contact textarea,.search-form input{background:#fff!important;color:#183348!important;border-color:#b9cdd7!important}
+.shell nav a{color:#466376!important}.shell nav a.active{background:#dff2e8!important;color:#17634e!important}
+.stats:not(:has(.stat)){background:#e5eef2!important;color:#294d62!important}
+#mapTools{background:#fffffff2!important;color:#294d62!important;border:1px solid #c6d6df}
+#notice{color:#815c13!important}
+.top .brand{flex-shrink:0}.top .brand img{width:220px}.top .nav{gap:18px;font-size:13px;white-space:nowrap}
+.slideContent{padding-top:105px}.slide h1{font-size:clamp(38px,5vw,68px);max-width:850px}
+@media(max-width:580px){.top .brand img{width:175px}.slideContent{padding-top:75px}.slide h1{font-size:42px}.slide p{font-size:18px}}
