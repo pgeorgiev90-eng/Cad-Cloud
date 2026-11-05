@@ -32,12 +32,8 @@ jobs:
           try:
               ftp.retrbinary("RETR .htaccess", existing.write)
           except ftplib.error_perm as exc:
-              if not str(exc).startswith("550"):
+              if not (str(exc).startswith("550") and "No such file or directory" in str(exc)):
                   raise
-              # Confirm the directory can be listed and the file is absent.
-              names = [name.rsplit("/", 1)[-1] for name in ftp.nlst("-a")]
-              if ".htaccess" in names:
-                  raise RuntimeError("Existing .htaccess could not be read") from exc
           original = existing.getvalue()
           marker = b"# BEGIN PDG HTTPS"
           if marker not in original:
