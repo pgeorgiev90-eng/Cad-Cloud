@@ -16,6 +16,9 @@
       const data=await r.json(),p=data.product;
       document.title=p.name+' | PDG Systems';$('name').textContent=p.name;
       $('category').textContent=p.brand+' · '+p.category;$('code').textContent='Код: '+p.code;
+      $('description').textContent=p.description||'';$('description-section').hidden=!p.description;
+      $('image-caption').textContent=p.imageCaption||(p.imageUrl?'Изображение на продуктовата серия.':'');
+      $('image-caption').hidden=!$('image-caption').textContent;
       const imageIndex=Number(p.imageIndex);
       if(p.imageUrl && /^https?:\/\//i.test(p.imageUrl)) {
         const img=document.createElement('img');img.className='product-image';img.src=p.imageUrl;img.alt=p.name;img.referrerPolicy='no-referrer';

@@ -42,6 +42,9 @@ jobs:
           php tests/category_migration.php
           node tests/catalog_categories_test.js
           php -l api/solar-yield.php
+          php -l api/product-content-bootstrap.php
+          php tests/content_migration.php
+          node --check product.js
       - name: Verify public specification API
         run: |
           php tests/configure_spec_ci.php
@@ -58,6 +61,8 @@ jobs:
                   if attempt==19: raise
                   time.sleep(.5)
           assert len(data['products'])==204
+          assert all(p.get('description') for p in data['products'])
+          assert sum(bool(p.get('imageUrl')) for p in data['products']) >= 45
           product=next(p for p in data['products'] if p['name']=='X1-BOOST-5K-G4')
           details=json.load(urllib.request.urlopen('http://127.0.0.1:8094/api/product-details.php?id='+str(product['id']),timeout=10))
           assert len(details['fields'])>=8
@@ -86,6 +91,9 @@ jobs:
           set net:max-retries 2
           set net:timeout 20
           set cmd:fail-exit true
+          mirror --reverse --verbose --only-newer --no-perms ./assets/products/ /assets/products/
+          put database/catalog-content-v1.json -o /database/catalog-content-v1.json
+          put api/product-content-bootstrap.php -o /api/product-content-bootstrap.php
           mirror --reverse --verbose --only-newer --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob tests/ --exclude-glob README.md --exclude-glob BUSINESS-ARCHITECTURE.md --exclude-glob .gitignore ./ /
           bye
           LFTP
@@ -121,3 +129,5 @@ jobs:
 # Publish verified catalog specifications and hide phase-source fields
 
 # Publish separate inverter, battery and accessory catalog sections
+
+# Publish sourced product photographs and Bulgarian descriptions
