@@ -22,15 +22,18 @@
   async function loadElectrical(setValues=true){
     const p=products.find(p=>String(p.id)===field('inverter').value),sequence=++specSequence;electricalSpec=null;
     field('inverterName').readOnly=Boolean(p);
-    if(!p){invalidate();return;}
+    if(!p){field('inverterKw').readOnly=false;invalidate();return;}
     field('inverterName').value=p.name;
-    if(setValues){field('inverterPrice').value=p.price??'';field('inverterKw').value='';}
+    const wasAutoPower=field('inverterKw').readOnly;
+    if(setValues){field('inverterPrice').value=p.price??'';field('inverterKw').value='';field('inverterKw').readOnly=false;}
     $('offer-inverter-status').textContent='Зареждане на характеристиките на '+p.name+'…';invalidate();
     try{
       const r=await fetch('api/product-details.php?id='+encodeURIComponent(p.id),{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();
       if(sequence!==specSequence||String(p.id)!==field('inverter').value)return;
       electricalSpec=core.electrical(data.fields);electricalSpec.productId=Number(p.id);
-      $('offer-inverter-status').textContent=electricalSpec.errors.length?electricalSpec.errors.join(' '):'Фазността и DC лимитът са прочетени от характеристиките на артикула. Потвърдете номиналната AC мощност.';
+      if(electricalSpec.acPowerKw){field('inverterKw').value=String(electricalSpec.acPowerKw);field('inverterKw').readOnly=true;}
+      else{field('inverterKw').readOnly=false;if(wasAutoPower)field('inverterKw').value='';}
+      $('offer-inverter-status').textContent=electricalSpec.errors.length?electricalSpec.errors.join(' '):'Фазността, DC лимитът'+(electricalSpec.acPowerKw?' и AC мощността са заредени':' са прочетени')+' от техническите спецификации на артикула.';
     }catch(e){if(sequence!==specSequence)return;electricalSpec={errors:['Характеристиките на инвертора не могат да се заредят.']};$('offer-inverter-status').textContent=electricalSpec.errors[0];}
     invalidate();
   }

@@ -33,7 +33,34 @@ jobs:
           php -l api/product-phase-bootstrap.php
           php -l api/products.php
           php tests/phase_migration.php
+          php -l api/product-spec-bootstrap.php
+          php -l api/product-details.php
+          php tests/spec_migration.php
+          node tests/catalog_specifications_test.js
           php -l api/solar-yield.php
+      - name: Verify public specification API
+        run: |
+          php -r 'file_put_contents(dirname(getcwd())."/pdg-shop-db.php", "<?php return ["host"=>"127.0.0.1","database"=>"pdg_migration_test","username"=>"root","password"=>"ci-only-password"];");'
+          php -S 127.0.0.1:8094 -t . > /tmp/spec-api.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          python - <<'PYTEST'
+          import json, urllib.request, time
+          for attempt in range(20):
+              try:
+                  data=json.load(urllib.request.urlopen('http://127.0.0.1:8094/api/products.php',timeout=10))
+                  break
+              except Exception:
+                  if attempt==19: raise
+                  time.sleep(.5)
+          assert len(data['products'])==204
+          product=next(p for p in data['products'] if p['name']=='X1-BOOST-5K-G4')
+          details=json.load(urllib.request.urlopen('http://127.0.0.1:8094/api/product-details.php?id='+str(product['id']),timeout=10))
+          assert len(details['fields'])>=8
+          assert not any(f['label']=='Източник за фазност' for f in details['fields'])
+          assert any(f['label']=='Номинална AC мощност (kW)' and f['value']=='5.1' for f in details['fields'])
+          print('PASS: public API serves editable specifications and hides phase-source rows')
+          PYTEST
       - name: Validate credentials
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -86,3 +113,5 @@ jobs:
 # Publish Solar CAD inverter selection and project offers
 
 # Publish product-driven string voltage constraints
+
+# Publish verified catalog specifications and hide phase-source fields

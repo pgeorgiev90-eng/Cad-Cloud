@@ -33,6 +33,13 @@
     if(!m)return null;const n=Number(m[1])*(/^(kv|кв)$/i.test(m[2]||'')?1000:1);return Number.isFinite(n)&&n>0?n:null;
   }
   function electrical(fields){
+    function scalar(labels,integer=false){
+      const entries=fields.filter(f=>labels.includes(normalize(f.label))).map(f=>String(f.value).trim().replace(',','.'));
+      if(!entries.length)return null;
+      const values=entries.map(v=>/^(?:\d+\.?\d*|\.\d+)(?:\s*(?:kW|кВт|V|В))?$/i.test(v)?Number.parseFloat(v):NaN);
+      if(values.some(v=>!Number.isFinite(v)||v<=0||(integer&&!Number.isInteger(v)))||new Set(values).size!==1)return null;
+      return values[0];
+    }
     const phaseLabels=['брой фази','фазност','фази','phase','phases','number of phases','ac phases'];
     const maxLabels=['максимално dc напрежение v','максимално dc напрежение','макс dc напрежение v','максимално входно dc напрежение v','максимално входно напрежение v','max dc voltage','max dc voltage v','max dc input voltage','maximum dc voltage','maximum input voltage','max input voltage','max input voltage v'];
     const capLabels=['лимит напрежение на стринг v','лимит напрежение на стринг','string voltage limit v','string voltage limit'];
@@ -46,7 +53,11 @@
     if(voltages.some(v=>v===null))errors.push('Невалидна характеристика за максимално DC напрежение.');
     const policyLimit=phase===1?400:phase===3?750:null;
     const limit=policyLimit&&errors.length===0?Math.min(policyLimit,...voltages):null;
-    return {phase,policyLimit,limit,errors};
+    const acPowerKw=scalar(['номинална ac мощност kw','номинална ac мощност квт','rated ac power kw','nominal ac power kw']);
+    const mpptCount=scalar(['брой mppt','number of mppt'],true);
+    const mpptMinVoltage=scalar(['минимално mppt напрежение v']);
+    const mpptMaxVoltage=scalar(['максимално mppt напрежение v']);
+    return {phase,policyLimit,limit,errors,acPowerKw,mpptCount,mpptMinVoltage,mpptMaxVoltage};
   }
   const knownModules={jinko440:{voc:39.57,coefficient:-0.25},longi435:{voc:39.33,coefficient:-0.23}};
   function panelElectrical(panel){
