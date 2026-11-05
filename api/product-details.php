@@ -10,6 +10,7 @@ try{
  $db=new PDO('mysql:host='.($s['host']??'localhost').';dbname='.($s['database']??'').';charset=utf8mb4',$s['username']??'',$s['password']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
  require_once __DIR__.'/product-phase-bootstrap.php';pdg_seed_inverter_phases($db);
  require_once __DIR__.'/product-spec-bootstrap.php';pdg_seed_product_specifications($db);
+ require_once __DIR__.'/product-category-bootstrap.php';pdg_classify_catalog_products($db);
  $q=$db->prepare('SELECT id,brand,category,code,name,price,image_url AS imageUrl,image_index AS imageIndex FROM products WHERE id=? AND active=1');$q->execute([$id]);$product=$q->fetch();if(!$product)result(404,['error'=>'not_found']);
  $fields=[];try{$q=$db->prepare('SELECT label,value FROM pdg_product_fields WHERE product_id=? ORDER BY sort_order,id');$q->execute([$id]);$fields=$q->fetchAll();}catch(PDOException $e){if($e->getCode()!=='42S02')throw $e;}
  $hidden=['източник за фазност','източник на фазност','phase source','source of phase','source of phases'];

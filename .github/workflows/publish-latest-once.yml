@@ -38,6 +38,9 @@ jobs:
           php -l api/product-details.php
           php tests/spec_migration.php
           node tests/catalog_specifications_test.js
+          php -l api/product-category-bootstrap.php
+          php tests/category_migration.php
+          node tests/catalog_categories_test.js
           php -l api/solar-yield.php
       - name: Verify public specification API
         run: |
@@ -116,3 +119,5 @@ jobs:
 # Publish product-driven string voltage constraints
 
 # Publish verified catalog specifications and hide phase-source fields
+
+# Publish separate inverter, battery and accessory catalog sections
