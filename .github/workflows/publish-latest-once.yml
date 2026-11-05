@@ -7,10 +7,9 @@ permissions:
   contents: read
 concurrency:
   group: pdg-production-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   deploy:
-    if: ${{ false }}
     needs: [account-tests, shop-tests]
     runs-on: ubuntu-latest
     environment: production
@@ -27,7 +26,7 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - uses: actions/checkout@v4
-      - name: Verify solar quote calculations and PHP syntax
+      - name: Verify Electric CAD, Solar CAD and catalogue migrations
         run: |
           node --check electrical-busbar-core.js
           node --check electrical-busbar.js
@@ -35,6 +34,9 @@ jobs:
           node --check electrical-quote.js
           node --check electrical-quote-core.js
           node --check electrical-cad-design.js
+          node --check electrical-catalog.js
+          node --check admin-electric.js
+          for f in api/electric-common.php api/electric-catalog.php api/electric-enquiries.php api/admin-electric.php; do php -l "$f" || exit; done
           node tests/electrical_quote_test.js
           node --check solar-offer.js
           node tests/solar_offer_test.js
@@ -111,22 +113,69 @@ jobs:
           set net:max-retries 2
           set net:timeout 20
           set cmd:fail-exit true
+          put database/electric-cad-schema.sql -o /database/electric-cad-schema.sql.pdg-upload
+          put database/electrical-catalog.json -o /database/electrical-catalog.json.pdg-upload
+          put database/electrical-source-index.json -o /database/electrical-source-index.json.pdg-upload
+          put assets/electric-cabinet-render.webp -o /assets/electric-cabinet-render.webp.pdg-upload
+          put api/electric-common.php -o /api/electric-common.php.pdg-upload
+          put api/electric-catalog.php -o /api/electric-catalog.php.pdg-upload
+          put api/electric-enquiries.php -o /api/electric-enquiries.php.pdg-upload
+          put api/admin-electric.php -o /api/admin-electric.php.pdg-upload
           put electrical-busbar-core.js -o /electrical-busbar-core.js.pdg-upload
           put electrical-busbar.js -o /electrical-busbar.js.pdg-upload
           put electrical-cad-design.css -o /electrical-cad-design.css.pdg-upload
           put electrical-cad-design.js -o /electrical-cad-design.js.pdg-upload
+          put electrical-catalog.js -o /electrical-catalog.js.pdg-upload
           put electrical-quote-core.js -o /electrical-quote-core.js.pdg-upload
           put electrical-quote.js -o /electrical-quote.js.pdg-upload
+          put admin-electric.js -o /admin-electric.js.pdg-upload
+          put admin-electric.html -o /admin-electric.html.pdg-upload
+          put admin-dashboard.html -o /admin-dashboard.html.pdg-upload
           put electrical-cad.html -o /electrical-cad.html.pdg-upload
+          mv -f /database/electric-cad-schema.sql.pdg-upload /database/electric-cad-schema.sql
+          mv -f /database/electrical-catalog.json.pdg-upload /database/electrical-catalog.json
+          mv -f /database/electrical-source-index.json.pdg-upload /database/electrical-source-index.json
+          mv -f /assets/electric-cabinet-render.webp.pdg-upload /assets/electric-cabinet-render.webp
+          mv -f /api/electric-common.php.pdg-upload /api/electric-common.php
+          mv -f /api/electric-catalog.php.pdg-upload /api/electric-catalog.php
+          mv -f /api/electric-enquiries.php.pdg-upload /api/electric-enquiries.php
+          mv -f /api/admin-electric.php.pdg-upload /api/admin-electric.php
           mv -f /electrical-busbar-core.js.pdg-upload /electrical-busbar-core.js
           mv -f /electrical-busbar.js.pdg-upload /electrical-busbar.js
           mv -f /electrical-cad-design.css.pdg-upload /electrical-cad-design.css
           mv -f /electrical-cad-design.js.pdg-upload /electrical-cad-design.js
+          mv -f /electrical-catalog.js.pdg-upload /electrical-catalog.js
           mv -f /electrical-quote-core.js.pdg-upload /electrical-quote-core.js
           mv -f /electrical-quote.js.pdg-upload /electrical-quote.js
+          mv -f /admin-electric.js.pdg-upload /admin-electric.js
+          mv -f /admin-electric.html.pdg-upload /admin-electric.html
+          mv -f /admin-dashboard.html.pdg-upload /admin-dashboard.html
           mv -f /electrical-cad.html.pdg-upload /electrical-cad.html
           bye
           LFTP
+
+      - name: Verify deployed Electric CAD and public catalog
+        shell: python
+        run: |
+          import hashlib, json, time, urllib.request, urllib.error
+          from pathlib import Path
+          root='https://pdgsystems.bg/'
+          version=str(time.time_ns())
+          def get(path):
+              url=root+path+('&' if '?' in path else '?')+'release='+version
+              return urllib.request.urlopen(url,timeout=40).read()
+          for path in ['electrical-cad.html','electrical-catalog.js','electrical-quote.js','admin-electric.html','assets/electric-cabinet-render.webp']:
+              assert hashlib.sha256(get(path)).digest()==hashlib.sha256(Path(path).read_bytes()).digest(),path
+          catalog=json.loads(get('api/electric-catalog.php?q=BM617116'))
+          assert catalog['labour_included'] is False
+          assert any(p['sku']=='BM617116--' and p['widthMm']==17.8 and p['imageUrl'] for p in catalog['products'])
+          try:
+              get('api/admin-electric.php')
+          except urllib.error.HTTPError as e:
+              assert e.code==401, e.code
+          else:
+              raise AssertionError('Admin endpoint is accessible anonymously')
+          print('Verified live CAD, catalogue migration, product data and admin access control.')
 
 # Publish MySQL catalog integration
 
@@ -184,7 +233,7 @@ jobs:
 
 # Release approved blue-white homepage design, 2026-11-05.
 
-# Publish Electric CAD free mounting and editable 3D busbars after migration regression checks.
+# Publish approved Electric CAD design, official catalog search, materials estimates and admin enquiries.
 
   account-tests:
     runs-on: ubuntu-latest
@@ -228,6 +277,7 @@ jobs:
           done
           python3 tests/account_security.py
           python3 tests/dashboard_security.py
+          python3 tests/electric_cad_integration.py
 
   shop-tests:
     runs-on: ubuntu-latest
