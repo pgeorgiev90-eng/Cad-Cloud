@@ -48,6 +48,13 @@
  $('mobile-remove').onclick=()=>$('deleteMarked').click();
  $('mobile-2d').onclick=()=>{editor.toggle2d();update();};
  $('mobile-3d').onclick=()=>{editor.toggle3d();update();};
+ $('mobile-locate').onclick=async()=>{
+  if(editor.state().mode==='roof'&&editor.state().points){announce('Завърши текущия скат, преди да преместиш картата към местоположението си.');return;}
+  const button=$('mobile-locate');button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='…';sheet(false);announce('Определяне на местоположението… Разреши достъпа, ако телефонът поиска.');
+  try{const point=await window.PDGSolarLocation.currentPosition(navigator.geolocation);if(editor.showLocation(point)){announce('Местоположението е отбелязано · точност около '+Math.round(point.accuracy)+' m. Избери „Скат“, за да започнеш да чертаеш.');}}
+  catch(error){announce(error.message);}
+  finally{button.disabled=false;button.removeAttribute('aria-busy');button.textContent='GPS';}
+ };
  $('mobile-zoom-in').onclick=()=>editor.zoom(1);
  $('mobile-zoom-out').onclick=()=>editor.zoom(-1);
  $('mobile-fit').onclick=()=>editor.fit();

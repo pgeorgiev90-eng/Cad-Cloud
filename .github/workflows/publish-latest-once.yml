@@ -47,6 +47,7 @@ jobs:
           node --check product.js
           node --check solar-mobile.js
           node tests/solar_mobile_test.js
+          node tests/solar_location_test.js
           python - <<'PYJS'
           from pathlib import Path
           import re, subprocess
@@ -143,3 +144,5 @@ jobs:
 # Publish sourced product photographs and Bulgarian descriptions
 
 # Publish PDG Solar CAD mobile workspace and local project recovery
+
+# Publish mobile current-location marker and accuracy circle
