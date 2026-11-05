@@ -21,7 +21,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -pci-only-password"
+          --health-cmd="mysqladmin ping --protocol=tcp -h 127.0.0.1 -pci-only-password"
           --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +32,7 @@ jobs:
           node tests/solar_string_test.js
           php -l api/product-phase-bootstrap.php
           php -l api/products.php
+          php -r 'for($i=0;$i<30;$i++){try{$db=new PDO("mysql:host=127.0.0.1;dbname=pdg_migration_test","root","ci-only-password");$db->query("SELECT 1");exit(0);}catch(Throwable $e){usleep(1000000);}}exit(1);'
           php tests/phase_migration.php
           php -l api/product-spec-bootstrap.php
           php -l api/product-details.php
