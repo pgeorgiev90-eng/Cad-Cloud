@@ -19,13 +19,24 @@ function pdg_import_schrack_shop(PDO $db): void {
         $existing = $db->prepare("SELECT id FROM products WHERE brand IN ('Schrack','Schrack Technik') AND REPLACE(code,'-','')=? LIMIT 1");
         $insert = $db->prepare('INSERT INTO products (brand,category,code,name,image_url,price) VALUES (?,?,?,?,?,?)');
         $field = $db->prepare('INSERT INTO pdg_product_fields(product_id,label,value,sort_order) VALUES (?,?,?,?)');
+        $updateImage = $db->prepare('UPDATE products SET image_url=?, image_index=NULL WHERE id=?');
+        $photoCaption = $db->prepare('INSERT INTO pdg_product_fields(product_id,label,value,sort_order) SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM pdg_product_fields WHERE product_id=? AND label=?)');
         $db->beginTransaction();
         foreach ($items as $item) {
             $existing->execute([str_replace('-', '', $item['code'])]);
-            if ($existing->fetchColumn()) continue;
-            $insert->execute(['Schrack Technik',$item['category'],$item['code'],$item['name'],$item['image'] ?: null,$item['price']]);
-            if ($item['source']) {
-                $field->execute([$db->lastInsertId(),'Страница на производителя',$item['source'],50]);
+            $id = $existing->fetchColumn();
+            if ($id !== false) {
+                if ($item['image']) $updateImage->execute([$item['image'], $id]);
+            } else {
+                $insert->execute(['Schrack Technik',$item['category'],$item['code'],$item['name'],$item['image'] ?: null,$item['price']]);
+                $id = $db->lastInsertId();
+                if ($item['source']) {
+                    $field->execute([$id,'Страница на производителя',$item['source'],50]);
+                }
+            }
+            if (!empty($item['imageCaption'])) {
+                $label = 'Бележка за снимката';
+                $photoCaption->execute([$id,$label,$item['imageCaption'],51,$id,$label]);
             }
         }
         $db->prepare('INSERT INTO pdg_catalog_migrations(name) VALUES(?)')->execute([$version]);

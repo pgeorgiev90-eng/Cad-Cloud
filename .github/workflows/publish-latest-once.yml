@@ -90,6 +90,11 @@ jobs:
           assert len(schrack)==len(expected)
           assert {p['code']:p['price'] for p in schrack}=={p['code']:p['price'] for p in expected}
           assert all(p['category'].startswith('Електроапаратура / ') for p in schrack)
+          assert {p['code']:p['imageUrl'] for p in schrack}=={p['code']:p['image'] or None for p in expected}
+          subprocess = __import__('subprocess')
+          subprocess.run(['php', 'tests/schrack_shop_photo_migration.php'], check=True)
+          refreshed=json.load(urllib.request.urlopen('http://127.0.0.1:8094/api/products.php',timeout=10))
+          assert {p['code']:p['imageUrl'] for p in refreshed['products'] if p['brand']=='Schrack Technik'}=={p['code']:p['image'] or None for p in expected}
           repeated=json.load(urllib.request.urlopen('http://127.0.0.1:8094/api/products.php',timeout=10))
           assert len(repeated['products'])==len(data['products'])
           assert sum(bool(p.get('imageUrl')) for p in data['products']) >= 45
@@ -150,6 +155,8 @@ jobs:
           expected=json.loads(Path('database/schrack-shop-catalog.json').read_text())
           for p in expected:
               assert live[p['code']]['category']==p['category'],p['code']
+              if p['image']:
+                  assert live[p['code']]['imageUrl']==p['image'],p['code']
           assert any(p.get('price') and float(p['price'])>0 for p in live.values())
           print('Verified live Schrack category assignment for',len(expected),'products.')
 
