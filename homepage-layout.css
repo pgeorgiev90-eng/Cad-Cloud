@@ -1,0 +1,51 @@
+/* Homepage proportions; intentionally scoped to avoid changing CAD workspaces. */
+.pdg-home .wrap{width:100%;max-width:1200px;padding-inline:clamp(18px,3vw,36px)}
+.pdg-home .section{padding-block:clamp(48px,6vw,80px)}
+.pdg-home .section h2{font-size:clamp(28px,3.2vw,42px);letter-spacing:-1.2px;max-width:880px}
+.pdg-home .lead{line-height:1.75;margin-bottom:30px}
+.pdg-home .hero{min-height:540px;height:clamp(500px,64vh,650px)}
+.pdg-home .slideContent{max-width:1200px;padding:clamp(70px,9vh,112px) clamp(18px,3vw,36px) 70px}
+.pdg-home .slide h1{font-size:clamp(36px,4.8vw,62px);max-width:780px;line-height:1.12}
+.pdg-home .slide p{font-size:clamp(17px,1.6vw,20px);max-width:590px}
+.pdg-home .slide img{object-position:70% center}
+.pdg-home .slide:nth-child(2) img{object-fit:contain;object-position:right center;background:#e8eef0}
+.pdg-home .service-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.pdg-home .card,.pdg-home .tool,.pdg-home .product{border-radius:20px;box-shadow:0 8px 30px #19394e08}
+.pdg-home .service-grid>.card:not(.panel-projects)>img{height:auto;aspect-ratio:16/9;object-fit:cover}
+.pdg-home .cardBody{padding:clamp(22px,3vw,32px)}
+.pdg-home .card h3,.pdg-home .tool h3{font-size:clamp(21px,2vw,26px);line-height:1.3;margin:9px 0 14px}
+.pdg-home .card p,.pdg-home .tool p{font-size:16px;line-height:1.75}
+.pdg-home .panel-projects{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);align-items:stretch;margin-top:4px}
+.pdg-home .panel-projects>a{display:flex;align-items:center;justify-content:center;min-width:0;background:#e8eef0;padding:20px}
+.pdg-home .panel-projects>a>img{display:block;width:100%;height:100%;min-height:280px;max-height:370px;object-fit:contain;object-position:center}
+.pdg-home .panel-projects>.cardBody{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:clamp(26px,4vw,48px)}
+.pdg-home .panel-projects .btn{margin-top:12px}
+.pdg-home .about{gap:clamp(28px,5vw,64px)}
+.pdg-home .about>img{height:auto;aspect-ratio:4/3;max-height:420px;object-fit:cover}
+.pdg-home .tools{align-items:stretch;gap:24px}
+.pdg-home .tool{display:flex;flex-direction:column}
+.pdg-home .tool>img,.pdg-home .cad-illustration{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
+.pdg-home .tool .cardBody{display:flex;flex-direction:column;align-items:flex-start;flex:1}
+.pdg-home .tool .cardBody>.btn{margin-top:auto}
+.pdg-home .tool p{margin-bottom:24px}
+.pdg-home .cad-illustration{display:grid;place-items:center;background:linear-gradient(135deg,#dfeef1,#e8f4eb);padding:26px;overflow:hidden}
+.pdg-home .cad-sheet{width:80%;max-width:330px;background:#fff;border:1px solid #b8cdd5;border-radius:8px;padding:18px 24px;box-shadow:0 16px 28px #234d6018;transform:rotate(-3deg)}
+.pdg-home .cad-sheet-title{font-size:12px;font-weight:750;color:#35586a}
+.pdg-home .cad-bus{height:22px;border-bottom:2px solid #087f6b;margin:0 18px}
+.pdg-home .cad-circuits,.pdg-home .cad-modules{display:grid;grid-template-columns:repeat(4,1fr);justify-items:center}
+.pdg-home .cad-circuits i{height:38px;width:2px;background:#087f6b;position:relative}
+.pdg-home .cad-circuits i:after{content:'';position:absolute;top:14px;left:-5px;width:12px;height:12px;border:2px solid #087f6b;background:white}
+.pdg-home .cad-modules{gap:8px;border-top:1px solid #cadbe0;padding:12px 0}
+.pdg-home .cad-modules b{width:100%;height:34px;border:1px solid #aac1cd;border-radius:3px;background:linear-gradient(#f4f7f9 35%,#27485b 35%,#27485b 65%,#f4f7f9 65%)}
+.pdg-home .contact{gap:36px;align-items:start}
+.pdg-home .contact form{padding:clamp(22px,3vw,32px)}
+.pdg-home .contact input{min-height:48px}
+.pdg-home .contact textarea{min-height:150px;resize:vertical}
+.pdg-home .btn{min-height:46px;line-height:1.35}
+.pdg-home .store .product{display:flex;flex-direction:column}
+.pdg-home .product>img{height:auto;aspect-ratio:16/10;object-fit:cover}
+.pdg-home .plans{gap:24px}
+@media(min-width:901px) and (max-width:1180px){.pdg-home .top .brand img{width:175px}.pdg-home .top .wrap{gap:14px}.pdg-home .top .nav{gap:12px;font-size:12px}.pdg-home .desktop-cad-link{padding:10px 12px}}
+@media(max-width:760px){.pdg-home .hero{height:560px;min-height:0}.pdg-home .service-grid,.pdg-home .panel-projects{grid-template-columns:minmax(0,1fr)}.pdg-home .panel-projects>a{padding:16px}.pdg-home .panel-projects>a>img{min-height:0;height:auto;max-height:320px;aspect-ratio:4/3}.pdg-home .panel-projects>.cardBody{padding:26px}.pdg-home .slide:after{background:linear-gradient(90deg,#f2f8fcf7,#f2f8fcd9)}.pdg-home .about>img{max-height:340px}.pdg-home .service-grid>.card:not(.panel-projects)>img{max-height:280px}.pdg-home .cad-illustration{padding:20px}}
+@media(max-width:420px){.pdg-home .slide h1{font-size:36px}.pdg-home .actions .btn{width:100%}.pdg-home .hero{height:620px}.pdg-home .stats{gap:18px}.pdg-home .cardBody{padding:22px}}
+@media(prefers-reduced-motion:reduce){.pdg-home .cad-sheet{transform:none}}
