@@ -41,7 +41,7 @@ jobs:
           php -l api/solar-yield.php
       - name: Verify public specification API
         run: |
-          php -r 'file_put_contents(dirname(getcwd())."/pdg-shop-db.php", "<?php return ["host"=>"127.0.0.1","database"=>"pdg_migration_test","username"=>"root","password"=>"ci-only-password"];");'
+          php tests/configure_spec_ci.php
           php -S 127.0.0.1:8094 -t . > /tmp/spec-api.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" || true' EXIT
