@@ -28,7 +28,8 @@ jobs:
       - name: PHP syntax and JavaScript checks
         run: |
           php -v
-          for file in api/shop-common.php api/cart.php api/checkout.php api/admin-orders.php tests/shop-router.php; do php -l "$file"; done
+          for file in api/product-details.php api/shop-common.php api/cart.php api/checkout.php api/admin-orders.php tests/shop-router.php; do php -l "$file"; done
+          node --check product.js
           node --check store.js
           node --check admin-orders.js
       - name: Configure isolated test database
@@ -61,7 +62,7 @@ jobs:
         run: |
           import ftplib, ssl, os, io
           from pathlib import Path
-          files = ['database/orders-schema.sql','api/shop-common.php','api/cart.php','api/checkout.php','api/admin-orders.php','store.css','store.js','admin-orders.js','cart.html','admin-orders.html','admin-dashboard.html','catalog.html','shop.html']
+          files = ['product.html','product.js','api/product-details.php','admin-products-draft.html','database/orders-schema.sql','api/shop-common.php','api/cart.php','api/checkout.php','api/admin-orders.php','store.css','store.js','admin-orders.js','cart.html','admin-orders.html','admin-dashboard.html','catalog.html','shop.html']
           ftp=ftplib.FTP_TLS(context=ssl.create_default_context(),timeout=30)
           ftp.connect(os.environ['FTP_HOST'],21)
           ftp.login(os.environ['FTP_USER'],os.environ['FTP_PASSWORD'])
@@ -100,7 +101,7 @@ jobs:
               assert cart['items'][0]['quantity']==1
           finally:
               assert api('api/cart.php',{'action':'clear'},csrf)['items']==[]
-          for path in ['cart.html','admin-orders.html','catalog.html','shop.html']:
+          for path in ['product.html','product.js','cart.html','admin-orders.html','catalog.html','shop.html']:
               assert client.open(base+path,timeout=30).status==200
           try: client.open(base+'api/admin-orders.php',timeout=30)
           except urllib.error.HTTPError as e: assert e.code==401
