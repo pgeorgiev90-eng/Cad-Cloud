@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
+    needs: [account-tests, shop-tests]
     runs-on: ubuntu-latest
     environment: production
     services:
@@ -27,6 +28,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify solar quote calculations and PHP syntax
         run: |
+          node --check electrical-busbar-core.js
+          node --check electrical-busbar.js
+          node tests/electrical_busbar_test.js
+          node --check electrical-quote.js
+          node --check electrical-quote-core.js
+          node --check electrical-cad-design.js
+          node tests/electrical_quote_test.js
           node --check solar-offer.js
           node tests/solar_offer_test.js
           node tests/solar_string_test.js
@@ -51,7 +59,7 @@ jobs:
           python - <<'PYJS'
           from pathlib import Path
           import re, subprocess
-          for index, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', Path('roof-cad.html').read_text(), re.S)):
+          for index, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', (Path('roof-cad.html').read_text()+Path('electrical-cad.html').read_text()), re.S)):
               if code.strip():
                   script=Path('/tmp/pdg-editor-'+str(index)+'.js'); script.write_text(code)
                   subprocess.run(['node','--check',str(script)],check=True)
@@ -102,10 +110,20 @@ jobs:
           set net:max-retries 2
           set net:timeout 20
           set cmd:fail-exit true
-          mirror --reverse --verbose --only-newer --no-perms ./assets/products/ /assets/products/
-          put database/catalog-content-v1.json -o /database/catalog-content-v1.json
-          put api/product-content-bootstrap.php -o /api/product-content-bootstrap.php
-          mirror --reverse --verbose --only-newer --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob tests/ --exclude-glob README.md --exclude-glob BUSINESS-ARCHITECTURE.md --exclude-glob .gitignore ./ /
+          put electrical-busbar-core.js -o /electrical-busbar-core.js.pdg-upload
+          put electrical-busbar.js -o /electrical-busbar.js.pdg-upload
+          put electrical-cad-design.css -o /electrical-cad-design.css.pdg-upload
+          put electrical-cad-design.js -o /electrical-cad-design.js.pdg-upload
+          put electrical-quote-core.js -o /electrical-quote-core.js.pdg-upload
+          put electrical-quote.js -o /electrical-quote.js.pdg-upload
+          put electrical-cad.html -o /electrical-cad.html.pdg-upload
+          mv -f /electrical-busbar-core.js.pdg-upload /electrical-busbar-core.js
+          mv -f /electrical-busbar.js.pdg-upload /electrical-busbar.js
+          mv -f /electrical-cad-design.css.pdg-upload /electrical-cad-design.css
+          mv -f /electrical-cad-design.js.pdg-upload /electrical-cad-design.js
+          mv -f /electrical-quote-core.js.pdg-upload /electrical-quote-core.js
+          mv -f /electrical-quote.js.pdg-upload /electrical-quote.js
+          mv -f /electrical-cad.html.pdg-upload /electrical-cad.html
           bye
           LFTP
 
@@ -164,3 +182,86 @@ jobs:
 # Publish balanced homepage photographs, service cards and responsive spacing
 
 # Release approved blue-white homepage design, 2026-11-05.
+
+# Publish Electric CAD free mounting and editable 3D busbars after migration regression checks.
+
+  account-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: pdg_test
+          MYSQL_ROOT_PASSWORD: test-root-password
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-root-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP syntax
+        run: |
+          php -l api/account-draft.php
+          php -l api/admin-products-draft.php
+          php -l api/setup-admin-draft.php
+          php -l api/registration-draft.php
+          php -l tests/bootstrap-account-ci.php
+          php -l api/admin-common.php
+          php -l api/admin-users.php
+          php -l api/admin-dashboard-install.php
+          php -l api/admin-product-fields.php
+          php -l api/product-details.php
+          php -l api/product-view.php
+          php -l api/admin-stats.php
+      - name: Test isolated login and authorization
+        run: |
+          php tests/bootstrap-account-ci.php
+          php -d auto_prepend_file=/tmp/pdg-test-https.php -d "sendmail_path=/bin/sh $GITHUB_WORKSPACE/tests/capture-mail-ci.sh" -S 127.0.0.1:8199 -t . > /tmp/pdg-php-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:8199/api/account-draft.php?action=session; then break; fi
+            sleep 1
+          done
+          python3 tests/account_security.py
+          python3 tests/dashboard_security.py
+
+  shop-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: pdg_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-only-password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax and JavaScript checks
+        run: |
+          php -v
+          for file in api/product-details.php api/shop-common.php api/cart.php api/checkout.php api/admin-orders.php tests/shop-router.php; do php -l "$file"; done
+          node --check product.js
+          node --check store.js
+          node --check admin-orders.js
+      - name: Configure isolated test database
+        shell: python
+        run: |
+          from pathlib import Path
+          Path('../pdg-shop-db.php').write_text("<?php return ['host'=>'127.0.0.1','database'=>'pdg_test','username'=>'root','password'=>'ci-only-password'];")
+      - name: Prepare product fixtures
+        run: |
+          php -r '$s=require dirname(getcwd())."/pdg-shop-db.php";$d=new PDO("mysql:host=".$s["host"].";dbname=".$s["database"],$s["username"],$s["password"]);$d->exec(file_get_contents("database/schema.sql"));$d->exec("INSERT INTO products (brand,category,code,name,price) VALUES (\"Enerack\",\"Test\",\"TEST-1\",\"Test product\",3.44),(\"SolaX\",\"Test\",\"TEST-2\",\"Price on request\",NULL)");'
+      - name: Integration tests on isolated server
+        run: |
+          php -S 127.0.0.1:8091 tests/shop-router.php > /tmp/shop-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          for attempt in $(seq 1 20); do curl -s http://127.0.0.1:8091/api/cart.php >/dev/null && break; sleep 1; done
+          python tests/shop_integration.py

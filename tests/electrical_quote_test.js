@@ -1,0 +1,4 @@
+const assert=require('node:assert/strict'),Q=require('../electrical-quote-core.js');
+const a=Q.calculate([{quantity:3,unitPrice:12.50},{quantity:0.45,unitPrice:40}],20,100);assert.equal(a.subtotal,155.5);assert.equal(a.tax,31.1);assert.equal(a.total,186.6);assert.equal(a.complete,true);
+const b=Q.calculate([{quantity:2,unitPrice:null},{quantity:1,unitPrice:0},{quantity:1,unitPrice:null,included:false}]);assert.equal(b.missing,1);assert.equal(b.complete,false);assert.equal(b.total,0);assert.equal(b.rows.length,2);
+assert.equal(Q.calculate([{quantity:3,unitPrice:.1}],20).total,.36);assert.throws(()=>Q.calculate([{quantity:-1,unitPrice:1}]));assert.throws(()=>Q.calculate([],101));assert.throws(()=>Q.calculate([],20,-1));console.log('PASS: quantities, bar length prices, labour, VAT, rounding, missing prices, zero prices and excluded positions');
