@@ -7,9 +7,10 @@ permissions:
   contents: read
 concurrency:
   group: pdg-production-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   deploy:
+    if: ${{ false }}
     needs: [account-tests, shop-tests]
     runs-on: ubuntu-latest
     environment: production
