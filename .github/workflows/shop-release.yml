@@ -1,0 +1,108 @@
+name: Test and publish online shop
+on:
+  push:
+    paths:
+      - '.github/workflows/shop-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: pdg_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-only-password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax and JavaScript checks
+        run: |
+          php -v
+          for file in api/shop-common.php api/cart.php api/checkout.php api/admin-orders.php tests/shop-router.php; do php -l "$file"; done
+          node --check store.js
+          node --check admin-orders.js
+      - name: Configure isolated test database
+        shell: python
+        run: |
+          from pathlib import Path
+          Path('../pdg-shop-db.php').write_text("<?php return ['host'=>'127.0.0.1','database'=>'pdg_test','username'=>'root','password'=>'ci-only-password'];")
+      - name: Prepare product fixtures
+        run: |
+          php -r '$s=require dirname(getcwd())."/pdg-shop-db.php";$d=new PDO("mysql:host=".$s["host"].";dbname=".$s["database"],$s["username"],$s["password"]);$d->exec(file_get_contents("database/schema.sql"));$d->exec("INSERT INTO products (brand,category,code,name,price) VALUES (\"Enerack\",\"Test\",\"TEST-1\",\"Test product\",3.44),(\"SolaX\",\"Test\",\"TEST-2\",\"Price on request\",NULL)");'
+      - name: Integration tests on isolated server
+        run: |
+          php -S 127.0.0.1:8091 tests/shop-router.php > /tmp/shop-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          for attempt in $(seq 1 20); do curl -s http://127.0.0.1:8091/api/cart.php >/dev/null && break; sleep 1; done
+          python tests/shop_integration.py
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish only shop files through verified FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, ssl, os, io
+          from pathlib import Path
+          files = ['database/orders-schema.sql','api/shop-common.php','api/cart.php','api/checkout.php','api/admin-orders.php','store.css','store.js','admin-orders.js','cart.html','admin-orders.html','admin-dashboard.html','catalog.html','shop.html']
+          ftp=ftplib.FTP_TLS(context=ssl.create_default_context(),timeout=30)
+          ftp.connect(os.environ['FTP_HOST'],21)
+          ftp.login(os.environ['FTP_USER'],os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          for path in files:
+              data=Path(path).read_bytes()
+              temporary=path+'.pdg-upload'
+              ftp.storbinary('STOR '+temporary,io.BytesIO(data))
+              ftp.rename(temporary,path)
+              check=io.BytesIO()
+              ftp.retrbinary('RETR '+path,check.write)
+              assert check.getvalue()==data, 'Upload mismatch: '+path
+              print('Verified:',path)
+          ftp.quit()
+      - name: Verify production catalog and cart without placing an order
+        shell: python
+        run: |
+          import json, urllib.request, urllib.error, http.cookiejar
+          base='https://pdgsystems.bg/'
+          client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+          def api(path,data=None,csrf=None):
+              headers={'Content-Type':'application/json'}
+              if csrf: headers['X-CSRF-Token']=csrf
+              request=urllib.request.Request(base+path,data=None if data is None else json.dumps(data).encode(),headers=headers)
+              return json.load(client.open(request,timeout=30))
+          products=api('api/products.php')['products']
+          product=next(p for p in products if p['price'] is not None and float(p['price'])>0)
+          cart=api('api/cart.php')
+          assert cart['items']==[]
+          csrf=cart['csrf']
+          try:
+              cart=api('api/cart.php',{'action':'add','id':int(product['id']),'quantity':2},csrf)
+              assert cart['items'][0]['quantity']==2 and cart['can_checkout']
+              cart=api('api/cart.php',{'action':'set','id':int(product['id']),'quantity':1},csrf)
+              assert cart['items'][0]['quantity']==1
+          finally:
+              assert api('api/cart.php',{'action':'clear'},csrf)['items']==[]
+          for path in ['cart.html','admin-orders.html','catalog.html','shop.html']:
+              assert client.open(base+path,timeout=30).status==200
+          try: client.open(base+'api/admin-orders.php',timeout=30)
+          except urllib.error.HTTPError as e: assert e.code==401
+          else: raise AssertionError('Admin endpoint is public')
+          print('PASS: live database catalog, add/update/clear cart, pages and private order administration')
