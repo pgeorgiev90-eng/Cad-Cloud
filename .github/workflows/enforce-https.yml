@@ -1,0 +1,70 @@
+name: Enforce HTTPS
+on:
+  push:
+    paths:
+      - '.github/workflows/enforce-https.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  https:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Preserve host configuration and enforce HTTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, ssl, os, io
+          from datetime import datetime, timezone
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ["FTP_HOST"], 21)
+          ftp.login(os.environ["FTP_USER"], os.environ["FTP_PASSWORD"])
+          ftp.prot_p()
+          ftp.cwd("/")
+          existing = io.BytesIO()
+          try:
+              ftp.retrbinary("RETR .htaccess", existing.write)
+          except ftplib.error_perm as exc:
+              if not str(exc).startswith("550"):
+                  raise
+              # Confirm the directory can be listed and the file is absent.
+              names = [name.rsplit("/", 1)[-1] for name in ftp.nlst("-a")]
+              if ".htaccess" in names:
+                  raise RuntimeError("Existing .htaccess could not be read") from exc
+          original = existing.getvalue()
+          marker = b"# BEGIN PDG HTTPS"
+          if marker not in original:
+              if original:
+                  backup = ".htaccess.pdg-backup-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+                  ftp.storbinary("STOR " + backup, io.BytesIO(original))
+              rules = b"""# BEGIN PDG HTTPS
+          RewriteEngine On
+          RewriteCond %{HTTPS} !=on
+          RewriteRule ^ https://pdgsystems.bg%{REQUEST_URI} [R=301,L,NE]
+          # END PDG HTTPS
+
+          """
+              updated = rules + original
+              ftp.storbinary("STOR .htaccess", io.BytesIO(updated))
+              verified = io.BytesIO()
+              ftp.retrbinary("RETR .htaccess", verified.write)
+              assert verified.getvalue() == updated, "Uploaded configuration differs"
+          ftp.quit()
+      - name: Verify HTTP redirect and HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / '/catalog.html?https_check=1'; do
+            headers=$(curl --silent --show-error --max-time 30 -D - -o /dev/null "http://pdgsystems.bg$path")
+            echo "$headers"
+            echo "$headers" | grep -Eq '^HTTP/[^ ]+ 301'
+            echo "$headers" | tr -d '\r' | grep -Fqi "location: https://pdgsystems.bg$path"
+            curl --fail --silent --show-error --location --max-redirs 3 --max-time 30 -o /dev/null "https://pdgsystems.bg$path"
+          done
