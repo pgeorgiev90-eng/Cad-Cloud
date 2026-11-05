@@ -1,0 +1,59 @@
+/* PDG Solar CAD: the same project and calculations, with touch-first controls. */
+.mobile-only{display:none!important}
+body.mobile-cad{height:100dvh;overflow:hidden;overscroll-behavior:none}
+body.mobile-cad header{height:58px;padding:8px 12px;padding-top:max(8px,env(safe-area-inset-top));gap:10px;position:relative;z-index:1401;background:#fff;border-bottom:1px solid #d5e3e7}
+body.mobile-cad header h1{font-size:18px;letter-spacing:-.4px;white-space:nowrap}
+body.mobile-cad header h1 small,body.mobile-cad #workspaceMode,body.mobile-cad #cadReturn{display:none!important}
+body.mobile-cad header>a{color:#087f6b!important;font-size:13px;white-space:nowrap}
+body.mobile-cad .layout{display:block;height:calc(100dvh - 58px - 80px - env(safe-area-inset-bottom));min-height:0}
+body.mobile-cad #mapWrap,body.mobile-cad #map{height:100%;min-height:0;width:100%}
+body.mobile-cad #map{touch-action:none}
+body.mobile-cad button,body.mobile-cad input,body.mobile-cad select{min-height:44px;font-size:16px;touch-action:manipulation}
+body.mobile-cad aside{display:none;position:fixed;z-index:1500;bottom:calc(88px + env(safe-area-inset-bottom));right:12px;width:calc(100% - 24px);max-width:430px;max-height:min(70dvh,650px);overflow-y:auto;overscroll-behavior:contain;background:#fff!important;border:1px solid #c7dcd7;border-radius:22px;box-shadow:0 12px 65px #163c4940;padding:0 16px 22px;scroll-padding-top:68px}
+body.mobile-cad.sheet-open aside{display:block}
+body.mobile-cad #mobile-sheet-head{display:flex!important;position:sticky;top:0;background:#fff;z-index:2;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #deebe7;margin-bottom:14px}
+body.mobile-cad #mobile-sheet-head button{margin:0;width:44px;font-size:22px}
+body.mobile-cad #cadTabs{margin-top:8px}
+body.mobile-cad #mapTools,body.mobile-cad #cadQuick{display:none!important}
+body.mobile-cad #pdg-launch,body.mobile-cad #pdg-menu{display:none!important}
+body.mobile-cad #mobile-nav{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;z-index:1600;bottom:0;left:0;right:0;gap:3px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #d8e5e4;box-shadow:0 -3px 22px #23434e0c}
+#mobile-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:60px;padding:6px 2px;border:0;border-radius:13px;background:transparent!important;color:#3d5f69!important;font-size:11px!important;font-weight:700;margin:0}
+#mobile-nav button span{font-size:22px;line-height:1}
+#mobile-nav button[aria-pressed=true]{background:#e4f4ec!important;color:#087f6b!important}
+body.mobile-cad #mobile-status{display:flex!important;position:absolute;top:10px;left:12px;right:64px;z-index:1201;flex-direction:column;gap:3px;pointer-events:none;background:#fffffff2;border:1px solid #d5e6e0;border-radius:14px;padding:10px 12px;box-shadow:0 3px 14px #153d4912;font-size:12px;color:#42616b}
+#mobile-status strong{font-size:14px;color:#173d4a}
+body.mobile-cad #mobile-actions{display:flex!important;position:absolute;z-index:1251;bottom:14px;left:12px;right:12px;gap:6px;justify-content:center;flex-wrap:wrap;pointer-events:none}
+#mobile-actions button{pointer-events:auto;min-height:46px;padding:10px 13px;font-size:13px!important;font-weight:700;box-shadow:0 2px 12px #153d4920;background:#fff!important;color:#174738!important;border:1px solid #c2d8ce;margin:0;border-radius:12px}
+#mobile-actions button.primary{background:#087f6b!important;color:#fff!important;border-color:#087f6b}
+#mobile-actions button[aria-pressed=true]{outline:2px solid #087f6b;outline-offset:1px}
+body.mobile-cad #mobile-zoom{display:flex!important;position:absolute;top:70px;right:10px;z-index:1252;flex-direction:column;gap:5px}
+#mobile-zoom button{width:44px;height:44px;border-radius:12px;background:#fff!important;color:#174738!important;border:1px solid #c2d8ce;margin:0;font-size:24px!important;padding:3px;box-shadow:0 3px 12px #153d4912}
+body.mobile-cad .leaflet-control-layers{margin:10px!important;border-radius:12px;max-width:190px}
+body.mobile-cad .leaflet-control-attribution{font-size:9px;max-width:90%}
+body.mobile-cad #mobile-crosshair{display:block!important;pointer-events:none;position:absolute;z-index:1200;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #087f6b}
+#mobile-crosshair:before,#mobile-crosshair:after{content:'';position:absolute;background:#087f6b;border:1px solid #fff}
+#mobile-crosshair:before{width:44px;height:3px;top:11px;left:-9px}
+#mobile-crosshair:after{height:44px;width:3px;left:11px;top:-9px}
+body.mobile-cad:not(.precise-drawing) #mobile-crosshair{display:none!important}
+body.mobile-cad .vertex-handle{width:28px!important;height:28px!important;margin-left:-14px!important;margin-top:-14px!important;border:5px solid #fff;box-shadow:0 0 0 2px #c17e10}
+body.mobile-cad .panel-move-handle,body.mobile-cad .panel-rotate-handle{width:40px!important;height:40px!important;margin-left:-20px!important;margin-top:-20px!important}
+body.mobile-cad #view2d{padding-top:115px;padding-bottom:78px}
+body.mobile-cad #view2dControls{top:76px!important;left:10px!important;gap:4px!important}
+body.mobile-cad #view2dControls button{font-size:12px;min-height:40px;padding:6px}
+body.mobile-cad #view2d .legend{display:none}
+body.mobile-cad #view3d>div:last-child{display:none}
+body.mobile-cad #solarOfferDialog{width:calc(100vw - 12px);max-height:94dvh;padding:14px;border-radius:18px;overflow:auto}
+body.mobile-cad #solarOfferDialog button{font-size:13px;min-height:44px}
+body.mobile-cad .offer-toolbar{top:-14px}
+body.mobile-cad #mobile-draft{display:block!important;position:fixed;z-index:1700;left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom));max-width:430px;margin:auto;background:#fff;border:1px solid #b9d9ca;padding:16px;border-radius:18px;box-shadow:0 8px 40px #173d4933}
+body.mobile-cad #mobile-draft[hidden]{display:none!important}
+#mobile-draft p{font-size:13px;line-height:1.5}
+#mobile-draft button{min-height:44px;font-size:14px}
+#mobile-save-status{font-size:12px;color:#52716a;margin:8px 0}
+@media(max-width:380px){body.mobile-cad header h1{font-size:16px}#mobile-nav button{font-size:10px!important}#mobile-actions button{padding:9px;font-size:12px!important}}
+@media print{#mobile-nav,#mobile-status,#mobile-actions,#mobile-zoom,#mobile-crosshair,#mobile-draft{display:none!important}}
+
+body.mobile-cad #cadIntro,body.mobile-cad .roof-step{background:#edf5f1!important;color:#183348!important}
+body.mobile-cad aside .note{color:#526a7b!important}
+
+body.mobile-cad.cad-mode .leaflet-control-layers{display:none!important}

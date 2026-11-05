@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict'),{validProject}=require('../solar-project-format.js');
+const roof={path:[[42.69,23.32],[42.69,23.3201],[42.6901,23.3201]],azimuth:180,tilt:10,manualArea:null,panels:[{lat:42.69,lng:23.32,w:1.134,h:1.762,power:440,rotation:90,model:'jinko440',voc:39.57}],mounting:{brand:'enerack',roofType:'tile',systemId:'tile'}};
+const project={version:1,planes:[roof],center:{lat:42.69,lng:23.32},zoom:20,offer:{client:'Тест',inverterName:'SolaX'}};
+const roundtrip=JSON.parse(JSON.stringify(project));assert.ok(validProject(roundtrip));assert.deepEqual(roundtrip,project);
+assert.ok(validProject({version:1,planes:[{...roof,moduleTilt:15}]}));
+assert.ok(validProject({version:1,planes:[]}));
+for(const data of [null,{}, {...project,version:2},{...project,planes:[{...roof,path:[[91,0],[0,0],[0,1]]}]},{...project,planes:[{...roof,path:[[0,0],[0,1]]}]},{...project,planes:[{...roof,tilt:81}]},{...project,planes:[{...roof,azimuth:360}]},{...project,planes:[{...roof,panels:[{...roof.panels[0],w:0}]}]},{...project,planes:[{...roof,panels:[{...roof.panels[0],lat:NaN}]}]}])assert.equal(validProject(data),false);
+assert.ok(validProject({...project,planes:[{...roof,panels:Array(1500).fill(roof.panels[0])}]}));
+assert.equal(validProject({...project,planes:[{...roof,panels:Array(1501).fill(roof.panels[0])}]}),false);
+assert.equal(validProject({...project,planes:Array(101).fill(roof)}),false);
+assert.equal(validProject({...project,planes:Array(14).fill({...roof,panels:Array(1500).fill(roof.panels[0])})}),false);
+console.log('PASS: mobile draft/file roundtrip, legacy projects, mounting/offer preservation, invalid coordinates/dimensions and import size limits');

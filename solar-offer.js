@@ -75,7 +75,7 @@
     const run=++generation;ready=false;$('offer-print').disabled=$('offer-download').disabled=true;
     const dialog=$('solarOfferDialog'),report=$('solar-offer-report');report.replaceChildren();dialog.showModal();
     $('offer-progress').textContent='Подготовка на офертата и прогнозния добив…';
-    report.append(text('p','PDG Systems · Фотоволтаични системи'),text('h1','Предварителна оферта за фотоволтаична система'),text('p','Дата: '+new Date().toLocaleDateString('bg-BG')));
+    report.append(text('p','PDG Solar CAD · PDG Systems'),text('h1','Предварителна оферта за фотоволтаична система'),text('p','Дата: '+new Date().toLocaleDateString('bg-BG')));
     if(s.client)report.append(text('p','Клиент: '+s.client));if(s.site)report.append(text('p','Обект: '+s.site));
     report.append(text('p',summary.count+' панела · '+number(summary.kwp,2)+' kWp DC · '+s.inverterQty+' × '+s.inverterName,'offer-summary'));
     report.append(text('h2','Панели и инвертор'),table(['Компонент','Брой','Мощност'],[...summary.groups.map(g=>[modelName(g),String(g.count),number(g.count*g.power/1000,2)+' kWp']),[s.inverterName,s.inverterQty,number(s.inverterKw,2)+' kW AC / бр.']]));
@@ -112,5 +112,5 @@
   };
   $('offer-close').onclick=()=>$('solarOfferDialog').close();
   $('offer-print').onclick=()=>{if(ready)window.print();};
-  $('offer-download').onclick=()=>{if(!ready)return;const doc='<!doctype html><html lang="bg"><meta charset="utf-8"><title>Оферта PDG Systems</title><style>body{font:15px/1.6 Arial;color:#183348;max-width:1000px;margin:30px auto;padding:20px}table{width:100%;border-collapse:collapse}td,th{text-align:left;border-bottom:1px solid #ccc;padding:10px;overflow-wrap:anywhere}h1{font-size:27px}.offer-summary{background:#e8f5ef;padding:15px}.offer-pending{color:#885d13}.offer-fine{font-size:12px}@media print{tr{break-inside:avoid}}</style>'+$('solar-offer-report').outerHTML+'</html>';const url=URL.createObjectURL(new Blob([doc],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='PDG-Systems-solar-offer.html';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+  $('offer-download').onclick=()=>{if(!ready)return;const doc='<!doctype html><html lang="bg"><meta charset="utf-8"><title>Оферта PDG Systems</title><style>body{font:15px/1.6 Arial;color:#183348;max-width:1000px;margin:30px auto;padding:20px}table{width:100%;border-collapse:collapse}td,th{text-align:left;border-bottom:1px solid #ccc;padding:10px;overflow-wrap:anywhere}h1{font-size:27px}.offer-summary{background:#e8f5ef;padding:15px}.offer-pending{color:#885d13}.offer-fine{font-size:12px}@media print{tr{break-inside:avoid}}</style>'+$('solar-offer-report').outerHTML+'</html>';const url=URL.createObjectURL(new Blob([doc],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='PDG-Solar-CAD-offer.html';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 })();
