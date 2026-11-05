@@ -1,0 +1,21 @@
+.menu-toggle{display:none}
+.mobile-cad-link{display:none}
+@media(max-width:900px){
+  header .wrap,header>div{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-top:12px;padding-bottom:12px}
+  header .brand,header .logo,header>div>a:first-child{flex-shrink:0}
+  header img,.top .brand img{width:185px;max-width:100%;height:auto}
+  header .menu-toggle{display:inline-flex;align-items:center;justify-content:center;gap:9px;margin-left:auto;padding:10px 14px;min-height:44px;border:1px solid #b9cdd7;border-radius:9px;background:#fff;color:#183348;font:700 14px system-ui;cursor:pointer}
+  .menu-icon{width:18px;height:14px;border-top:2px solid currentColor;border-bottom:2px solid currentColor;position:relative}
+  .menu-icon:after{content:'';position:absolute;left:0;right:0;top:5px;border-top:2px solid currentColor}
+  header nav.site-navigation,.top nav.site-navigation{display:none;order:5;width:100%;margin:0;padding:8px;background:#fff;border:1px solid #d7e3e9;border-radius:12px;box-shadow:0 8px 20px #19394e0a;overflow:visible;white-space:normal;gap:0;flex-direction:column;align-items:stretch;max-height:calc(100dvh - 100px);overflow-y:auto}
+  header nav.site-navigation.is-open{display:flex}
+  header nav.site-navigation a{display:block;margin:0;padding:13px 14px;min-height:46px;font-size:15px;line-height:1.35;text-align:left;color:#294d62;border-radius:7px;text-decoration:none;white-space:normal}
+  header nav.site-navigation a:hover,header nav.site-navigation a:focus-visible{background:#e8f5ef;color:#087f6b}
+  header nav.site-navigation a[aria-current=page]{background:#e8f5ef;color:#087f6b;font-weight:700}
+  header nav.site-navigation .cart-link{border:0;background:transparent;display:flex;justify-content:flex-start;gap:8px}
+  header nav.site-navigation .cart-link [data-cart-count]{display:inline-block;padding:1px 8px}
+  .desktop-cad-link{display:none!important}
+  header nav.site-navigation .mobile-cad-link{display:block;background:#087f6b;color:#fff;margin-top:6px}
+  .top .wrap{gap:12px}
+}
+@media(max-width:360px){header img,.top .brand img{width:160px}header .menu-toggle{padding:10px}}
