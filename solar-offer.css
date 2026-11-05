@@ -1,0 +1,26 @@
+#solar-offer-settings{margin:22px 0;padding:16px;background:#fff;border:1px solid #c3dbd1;border-radius:12px;color:#183348}
+#solar-offer-settings h2{font-size:18px;margin:0 0 10px}
+#solar-offer-settings input,#solar-offer-settings select{width:100%;background:#fff;color:#183348}
+#solar-offer-settings button{width:100%;margin-top:12px;background:#087f6b;color:white}
+#solar-offer-settings .note{color:#526a7b}
+#solarOfferDialog{width:min(1000px,calc(100vw - 28px));max-height:90dvh;border:1px solid #c3d8df;border-radius:16px;padding:24px;background:#fff;color:#183348;box-shadow:0 20px 80px #18334840}
+#solarOfferDialog::backdrop{background:#102b3b80}
+.offer-toolbar{display:flex;gap:10px;flex-wrap:wrap;position:sticky;top:-24px;background:#fff;padding:10px 0;z-index:1}
+.offer-toolbar button{background:#087f6b;color:#fff}
+#solar-offer-report h1{font-size:28px;line-height:1.25;margin:20px 0 10px}
+#solar-offer-report h2{font-size:20px;margin:28px 0 10px}
+#solar-offer-report p{line-height:1.6}
+#solar-offer-report .offer-summary{background:#e8f5ef;padding:18px;border-radius:10px;font-size:18px}
+#solar-offer-report table{width:100%;border-collapse:collapse;table-layout:fixed}
+#solar-offer-report td,#solar-offer-report th{padding:10px 6px;border-bottom:1px solid #d7e3e9;text-align:left;vertical-align:top;overflow-wrap:anywhere;font-size:13px}
+#solar-offer-report th{color:#37566a}
+#solar-offer-report .offer-pending{color:#885d13;background:#fff6df;padding:12px;border-radius:8px}
+#solar-offer-report .offer-fine{font-size:12px;color:#526a7b}
+@media(max-width:600px){#solarOfferDialog{padding:14px}.offer-toolbar{top:-14px}#solar-offer-report h1{font-size:23px}#solar-offer-report td,#solar-offer-report th{font-size:11px;padding:8px 3px}}
+@media print{
+ @page{size:A4;margin:15mm}
+ body:has(#solarOfferDialog[open])>*:not(#solarOfferDialog){display:none!important}
+ #solarOfferDialog[open]{display:block!important;position:static;overflow:visible;max-height:none;width:100%;max-width:none;margin:0;padding:0;border:0;box-shadow:none}
+ #solarOfferDialog::backdrop,.offer-toolbar{display:none!important}
+ #solar-offer-report h2{break-after:avoid}#solar-offer-report tr{break-inside:avoid}
+}
