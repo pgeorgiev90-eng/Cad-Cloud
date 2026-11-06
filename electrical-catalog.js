@@ -2,7 +2,7 @@
 'use strict';
 let products=[],rates=[],sourceIndex={},online=false,shopOnline=null,category='',limit=24,selectionRequest=0;const byCode=new Map(), shopByCode=new Map();
 const shopKey=s=>String(s||'').trim().toUpperCase().replace(/-+$/,'');
-const shopPrice=value=>value!==null&&value!==undefined&&Number.isFinite(Number(value))&&Number(value)>0?Number(value):null;
+const shopPrice=value=>value!==null&&value!==undefined&&Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null;
 const norm=s=>String(s||'').normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]+/gu,'');
 const publicPrice=p=>typeof p?.unitPrice==='number'&&Number.isFinite(p.unitPrice)?p.unitPrice:null;
 const left=document.querySelector('.layout>aside'),result=$('catalogResults'),search=$('catalogSearch');
@@ -103,7 +103,7 @@ const originalSelection=showSelection;showSelection=function(){originalSelection
 window.addEventListener('pdg-cad-change',renderCabinet);
 window.PDGElectricCatalog={select:selectProduct,find:sku=>pricedProduct(byCode.get(norm(sku))),refreshPrices,shopOnline:()=>shopOnline,rate:(w,t)=>{const r=rates.find(x=>Number(x.width_mm)===Number(w)&&Number(x.thickness_mm)===Number(t));return r?Number(r.price_per_m_cents)/100:null},online:()=>online,ready:null};
 fetch('database/electrical-source-index.json').then(r=>r.ok?r.json():{}).then(d=>{sourceIndex=d;render()}).catch(()=>{});
-window.PDGElectricCatalog.ready=(async()=>{try{const r=await fetch('api/electric-catalog.php',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();if(!Array.isArray(data.products))throw Error();products=data.products;rates=data.busbarRates||[];online=true}catch{try{const r=await fetch('database/electrical-catalog.json');if(!r.ok)throw Error();products=(await r.json()).products||[];const ref=await fetch('database/electrical-reference-prices.json').then(r=>r.ok?r.json():{}).catch(()=>({}));rates=Object.values(ref.busbarRates||{});for(const p of products){const cents=ref.products?.[norm(p.sku)];if(Number.isInteger(cents)){p.unitPrice=cents/100;p.priceSource='schrack_2026_06'}}}catch{products=[]}}for(const p of products)indexProduct(p);render();if(initialDemo&&items.every(it=>!it.sku))sample();renderCabinet()})();
+window.PDGElectricCatalog.ready=(async()=>{try{const r=await fetch('api/electric-catalog.php',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();if(!Array.isArray(data.products))throw Error();products=data.products;rates=data.busbarRates||[];online=true}catch{try{const r=await fetch('database/electrical-catalog.json');if(!r.ok)throw Error();products=(await r.json()).products||[];rates=[];for(const p of products)p.unitPrice=null;}catch{products=[]}}for(const p of products)indexProduct(p);render();if(initialDemo&&items.every(it=>!it.sku))sample();renderCabinet()})();
 const cadReady=window.PDGElectricCatalog.ready;
 let shopRequest;
 function refreshPrices(){

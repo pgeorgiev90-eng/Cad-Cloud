@@ -31,7 +31,7 @@
     if(!plan.rows.length&&!plan.errors.length)box.append(text('p','Поставете панели с попълнени Voc и температурен коефициент.'));
     box.append(text('p','Ограничение по максимално напрежение. Броят MPPT/входове, токовете и минималното работно напрежение изискват отделна проверка.'));
   }
-  const catalogPrice=p=>Number(p?.price)>0?String(p.price):'';
+  const catalogPrice=p=>p?.price!==null&&p?.price!==undefined&&Number(p.price)>=0?String(p.price):'';
   const priceLabel=p=>catalogPrice(p)?Number(p.price).toLocaleString('bg-BG',{style:'currency',currency:'EUR'})+' без ДДС':'Цена по запитване';
   async function loadElectrical(setValues=true){
     const p=products.find(p=>String(p.id)===field('inverter').value),sequence=++specSequence;electricalSpec=null;

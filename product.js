@@ -26,7 +26,10 @@
       } else if(p.imageIndex!==null && Number.isInteger(imageIndex) && imageIndex>=0) {
         const photo=document.createElement('div');photo.className='sprite';photo.style.backgroundPosition=(-150*(imageIndex%10))+'px '+(-150*Math.floor(imageIndex/10))+'px';photo.setAttribute('role','img');photo.setAttribute('aria-label',p.name);$('photo').append(photo);
       } else {$('photo').textContent='Снимка предстои';}
-      if(Number(p.price)>0) {
+      if(!data.prices_visible){
+        const login=document.createElement('a');login.href='auth.html?next='+encodeURIComponent('product.html?id='+id);
+        login.textContent='Влезте, за да видите цената';$('price').replaceChildren(login);
+      } else if(p.price!==null) {
         $('price').textContent=money(p.price)+' без ДДС';$('vat').textContent=money(Number(p.price)*1.2)+' с ДДС';$('buy').hidden=false;
         $('add').onclick=async()=>{if(!$('quantity').reportValidity())return;$('add').disabled=true;try{await window.PDGStore.add(p.id,Number($('quantity').value));}catch(e){}finally{$('add').disabled=false;}};
       } else {$('price').textContent='Цена по запитване';$('inquiry').hidden=false;}

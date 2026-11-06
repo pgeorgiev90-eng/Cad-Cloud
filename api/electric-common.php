@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/customer-pricing.php';
 function electric_bootstrap(PDO $db): void {
  $db->exec(file_get_contents(dirname(__DIR__).'/database/electric-cad-schema.sql'));
  $file=dirname(__DIR__).'/database/electrical-catalog.json';if(!is_file($file))throw new RuntimeException('catalog');
@@ -33,7 +34,7 @@ function electric_shop_parts(PDO $db): array {
  }
  return $parts;
 }
-function electric_materials(PDO $db,array $input): array {
+function electric_materials(PDO $db,array $input,int $discount=0): array {
  $parts=$input['parts']??null;$bars=$input['busbars']??[];if(!is_array($parts)||count($parts)>500||!is_array($bars)||count($bars)>300)throw new InvalidArgumentException('parts');$lines=[];$total=0;$missing=0;$enclosures=0;
  $q=$db->prepare('SELECT product_json,price_cents FROM pdg_electric_products WHERE sku=? AND active=1');
  $shop=electric_shop_parts($db);
@@ -47,6 +48,7 @@ function electric_materials(PDO $db,array $input): array {
   $isEnclosure=$p?($p['type']??'')==='ENCLOSURE':str_contains($store['category'],'Табла и корпуси');
   if($isEnclosure)$enclosures+=$part['quantity'];
   $unit=$store?((float)$store['price']>0?(int)round((float)$store['price']*100):null):electric_unit_cents($part['sku'],$row['price_cents']);
+  if($store&&$unit!==null)$unit=pdg_discounted_cents($unit,$discount);
   $amount=$unit===null?null:$unit*$part['quantity'];
   if($amount===null)$missing++;else $total+=$amount;
   $lines[]=['sku'=>$part['sku'],'name'=>$p['name']??$store['name'],'quantity'=>$part['quantity'],'unit'=>'бр.','unit_cents'=>$unit,'line_cents'=>$amount];

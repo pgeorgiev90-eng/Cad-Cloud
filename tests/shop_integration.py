@@ -31,6 +31,10 @@ def sql(statement):
     code = '$s=require dirname(getcwd())."/pdg-shop-db.php";$d=new PDO("mysql:host=".$s["host"].";dbname=".$s["database"],$s["username"],$s["password"]);$d->exec($argv[1]);'
     subprocess.run(['php', '-r', code, statement], check=True)
 
+api('api/cart.php', expected=401)
+subprocess.run(['php','-r', '$s=require dirname(getcwd())."/pdg-shop-db.php";$d=new PDO("mysql:host=".$s["host"].";dbname=".$s["database"],$s["username"],$s["password"]);$d->exec(file_get_contents("database/accounts-schema.sql"));$q=$d->prepare("INSERT INTO pdg_users(email,password_hash,role) VALUES(?,?,?)");$q->execute(["cart-ci@example.test",password_hash("Cart-ci-password-123",PASSWORD_DEFAULT),"customer"]);'], check=True)
+session = api('api/account-draft.php?action=session')
+api('api/account-draft.php?action=login', {'email':'cart-ci@example.test','password':'Cart-ci-password-123'}, session['csrf'])
 cart = api('api/cart.php')
 assert cart['items'] == [] and not cart['can_checkout']
 csrf = cart['csrf']
