@@ -31,6 +31,27 @@ function drawingPoint(event){
  return {x:(point.x-50)/scale,y:(point.y-120)/scale,z:Number($('barDepth').value)};
 }
 const canFeedByBar=entry=>items[entry.index].catalogType==='MCCB';
+function nearbyTerminal(event, eligible=()=>true){
+ const matrix=$('drawing').getScreenCTM();
+ let closest, distance=11;
+ for(const terminal of terminalEntries().filter(eligible)){
+  const p=C.project({...terminal,z:0},'front');
+  const screen=new DOMPoint(p.x,p.y).matrixTransform(matrix);
+  const d=Math.hypot(screen.x-event.clientX,screen.y-event.clientY);
+  if(d<distance){closest=terminal;distance=d;}
+ }
+ return closest;
+}
+function routePoint(event, origin){
+ const raw=drawingPoint(event);
+ const round=n=>guideGrid.checked?Math.round(n/5)*5:n;
+ const p={...raw,x:round(raw.x),y:round(raw.y)};
+ if(origin&&guideOrtho.checked){
+  if(Math.abs(raw.x-origin.x)>=Math.abs(raw.y-origin.y))p.y=origin.y;
+  else p.x=origin.x;
+ }
+ return p;
+}
 function pfrom(event){
  const point=drawingPoint(event);
  if(!editing)return C.snap(point,targets());
@@ -127,6 +148,7 @@ function connect(entry) {
         const connection={from:wireStart,to:end,bends:wireBends,phase:phaseSelect.value};
         if(channelY!==undefined)Object.assign(connection,{id:crypto.randomUUID(),channelY});
         if(branchDraft)Object.assign(connection,branchDraft);
+        if(channelY===undefined&&!guideOrtho.checked)connection.freeAngle=true;
         try {
             W.validate(items,[...connections,connection],bars);
             connections.push(connection);
@@ -262,6 +284,9 @@ function wireShape(tag, attrs, connection, width) {
     node(tag,{...base,stroke:phase?.color||'#087dc2','data-connection':'','aria-label':phase?.label||'Връзка'});
     if (phase?.stripe) node(tag,{...base,stroke:phase.stripe,'stroke-dasharray':'6 6','stroke-linecap':'butt'});
 }
+function wireRoute(start,end,bends,freeAngle){
+    return freeAngle?[start,...bends,end]:W.route(start,end,bends);
+}
 function channelLane(wire){
     return wire.channelY+(['L1','L2','L3','N','PE'].indexOf(wire.phase)-2)*2.8;
 }
@@ -281,7 +306,7 @@ function drawWires(entries) {
         }
         const lane=channelLane(connection);
         const bends=connection.channelY===undefined?connection.bends:[{x:start.x,y:lane},{x:end.x,y:lane}];
-        const route=W.route(start,end,bends).map(p=>C.project({...p,z:0},view));
+        const route=wireRoute(start,end,bends,connection.channelY===undefined&&connection.freeAngle).map(p=>C.project({...p,z:0},view));
         const attrs={points:route.map(p=>p.x+','+p.y).join(' ')};
         if(!wiring&&selectedWire===connection)node('polyline',{...attrs,fill:'none',stroke:'#2874ee','stroke-width':8,'pointer-events':'none'});
         wireShape('polyline',attrs,connection,3);
@@ -364,6 +389,8 @@ $('drawing').addEventListener('click',event=>{
         if (entry) connect(entry);
         return;
     }
+    const near=guideTerminals.checked?nearbyTerminal(event):null;
+    if(near&&!event.target.closest('[data-busbar]')){connect(near);return;}
     const channel=event.target.closest('[data-wire-channel]');
     if(channel&&wireStart&&!branchDraft){
         channelY=Number(channel.getAttribute('data-wire-channel'));wireBends=[];
@@ -379,12 +406,81 @@ $('drawing').addEventListener('click',event=>{
         return;
     }
     if (!wireStart || event.target.closest('[data-device]') || wireBends.length>=24) return;
-    const point=drawingPoint(event);
-    const x=Math.round(point.x/5)*5, y=Math.round(point.y/5)*5;
+    const origin=wireBends.at(-1)||wireOrigin();
+    const {x,y}=routePoint(event,origin);
     if (x<0 || x>usableW() || y<0 || y>usableH()) return status('Чупката трябва да е в монтажната плоча.');
     if(branchDraft||channelY!==undefined)return;
     wireBends.push({x,y});redraw();
 },true);
+function guideOption(text){
+ const label=document.createElement('label'),input=document.createElement('input');
+ input.type='checkbox';input.checked=true;label.append(input,' '+text);toolbar.append(label);
+ return input;
+}
+const guideTerminals=guideOption('Клеми');
+const guideGrid=guideOption('Мрежа 5 mm');
+const guideOrtho=guideOption('Само 90°');
+function wireOrigin(){
+ if(!wireStart)return null;
+ const locate=end=>end.bar?W.tapPosition(bars.find(b=>b.id===end.bar),end):terminalEntries().find(t=>W.key(t.end)===W.key(end));
+ const source=locate(wireStart);
+ if(!branchDraft||!source)return source;
+ const parent=connections.find(w=>w.id===branchDraft.branchOf);
+ const end=parent&&locate(parent.to);
+ return end?{x:source.x+(end.x-source.x)*branchDraft.branchFraction,y:channelLane(parent)}:null;
+}
+const drawing=$('drawing');
+const clearGuide=()=>drawing.querySelector('[data-drawing-guide]')?.remove();
+drawing.addEventListener('pointerleave',clearGuide);
+drawing.addEventListener('pointermove',event=>{
+ clearGuide();
+ const bar=editing===true;
+ if(view!=='front'||moving||(!bar&&!wiring)||branching)return;
+ const origin=bar?draft?.points[0]:wireOrigin();
+ const bends=bar?draft?.points.slice(1)||[]:wireBends;
+ const last=bends.at(-1)||origin;
+ const terminal=guideTerminals.checked?nearbyTerminal(event,bar?canFeedByBar:undefined):null;
+ const next=terminal||routePoint(event,last);
+ if(next.x<0||next.y<0||next.x>usableW()||next.y>usableH())return;
+ const group=node('g',{'data-drawing-guide':'','pointer-events':'none','aria-hidden':'true'});
+ const project=point=>C.project({...point,z:0},'front');
+ const p=project(next);
+ const color=bar?(W.phases[newBarPhase.value]?.color||$('barColor').value):(W.phases[phaseSelect.value]?.color||'#087dc2');
+ const stroke=(points,attrs)=>node('polyline',{points:points.map(project).map(p=>p.x+','+p.y).join(' '),
+    fill:'none','stroke-width':3,stroke:color,'stroke-linecap':'round',...attrs},group);
+ if(origin){
+  if(bends.length&&!bar)stroke([origin,...bends],{});
+  let tentative=[last,next];
+  if(!bar&&channelY!==undefined){
+   const lane=channelLane({phase:phaseSelect.value,channelY});
+   tentative=[origin,{x:origin.x,y:lane},{x:next.x,y:lane},next];
+  }else if(!bar&&guideOrtho.checked){
+   tentative=wireRoute(origin,next,bends,false);
+   if(bends.length){
+    const index=tentative.lastIndexOf(last);
+    if(index>=0)tentative=tentative.slice(index);
+   }
+  }
+  stroke(tentative,{'stroke-dasharray':'7 5'});
+  if(guideOrtho.checked&&channelY===undefined){
+   const horizontal=Math.abs(next.y-last.y)<.001;
+   const vertical=Math.abs(next.x-last.x)<.001;
+   if(horizontal||vertical)stroke(horizontal?[{x:0,y:last.y},{x:usableW(),y:last.y}]:
+      [{x:last.x,y:0},{x:last.x,y:usableH()}],{stroke:'#009cb8','stroke-width':1,'stroke-dasharray':'5 5'});
+  }
+  const start=project(origin), fixed=project(last);
+  node('circle',{cx:start.x,cy:start.y,r:4.5,fill:color},group);
+  if(bends.length)node('rect',{x:fixed.x-3,y:fixed.y-3,width:6,height:6,fill:color},group);
+ }
+ node('circle',{cx:p.x,cy:p.y,r:terminal?7:4,stroke:color,fill:'none','stroke-width':2},group);
+ node('path',{d:`M ${p.x-10} ${p.y} h20 M ${p.x} ${p.y-10} v20`,stroke:'#17253d','stroke-width':1,fill:'none'},group);
+ if(terminal){
+  const text=node('text',{x:p.x+10,y:p.y-10,fill:'#17253d','font-size':11,stroke:'#fff','stroke-width':3,'paint-order':'stroke'},group);
+  text.textContent=(items[terminal.index]?.designation||'Q'+(terminal.index+1))+' · '+(terminal.end.side==='top'?'горна ':'долна ')+(terminal.end.pole+1);
+ }
+});
+const exportDrawing=$('svgExport').onclick;
+$('svgExport').onclick=event=>{clearGuide();return exportDrawing.call($('svgExport'),event);};
 const groupButton=button(toolbar,'Маркирай група',()=>{
     if (view!=='front') setView('front');
     stopWire();placing=false;editing=false;draft=null;
@@ -521,7 +617,10 @@ $('drawing').addEventListener('pointerdown',event=>{
    status('За клемите на този апарат използвай „Чертай проводник“.');return;
   }
  }
- append(pfrom(event));
+ const terminal=editing==='module'||!guideTerminals.checked?null:nearbyTerminal(event,canFeedByBar);
+ const point=editing==='module'?pfrom(event):terminal?{x:terminal.x,y:terminal.y,z:Number($('barDepth').value)}:
+    routePoint(event,draft?.points.at(-1));
+ append(point);
 },true);
 $('drawing').addEventListener('pointerup',e=>{if(moving){suppressClick=true;e.stopImmediatePropagation();const p=pfrom(e);if(moving.kind==='channel'){
  const wire=connections[moving.index],delta=drawingPoint(e).y-moving.start.y;
@@ -633,6 +732,14 @@ document.addEventListener('keydown',e=>{
   e.preventDefault();selectedWire=null;selected=-1;active=-1;marked.clear();
   redraw();showSelection();status('Избраното е изтрито. Можеш да го върнеш с „Отмени“.');
   return;
+ }
+ if(key==='backspace'&&(wiring||editing===true)){
+  e.preventDefault();
+  if(editing===true&&draft){
+   draft.points.pop();if(!draft.points.length)draft=null;
+  }else if(channelY!==undefined&&!branchDraft)channelY=undefined;
+  else wireBends.pop();
+  redraw();return;
  }
  if(e.key==='Escape')cancel();
  if(e.key==='Enter'&&editing)finish();
