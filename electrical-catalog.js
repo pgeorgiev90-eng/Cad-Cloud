@@ -38,6 +38,10 @@ function dimensions(fields){
   number(['дълбочина','нето дълбочина','дълбочина (mm)','дълбочина (мм)'])];
 }
 function armProduct(p){
+ if(['MCCB','BUS_SUPPORT'].includes(p.type)&&$('boardMode').value!=='free'){
+  $('status').textContent='За този артикул избери „Свободен монтаж“, после го избери от каталога отново.';
+  return;
+ }
  if(p.type==='ENCLOSURE'){PDGCad.chooseCabinet(p);renderCabinet();return}
  if(view!=='front')setView('front');
  selectedCatalog=p;PDGCad.arm();
@@ -59,10 +63,6 @@ function confirmDimensions(p,sizes){
  sizeDialog.showModal();
 }
 function armShopProduct(p,[widthMm,heightMm,depthMm]){
- if(['MCCB','BUS_SUPPORT'].includes(p.type)&&$('boardMode').value!=='free'){
-  $('status').textContent='За този артикул избери „Свободен монтаж“, после го избери от каталога отново.';
-  return;
- }
  armProduct({...p,widthMm,heightMm,depthMm,modules:Math.ceil(widthMm/18),rating:p.rating||''});
 }
 async function selectProduct(p,button){
@@ -92,7 +92,7 @@ let initialDemo=items.length>0&&items.every(it=>!it.sku);const oldDemo=$('demo')
 function sample(){const box=byCode.get(norm('WSA8060260'));if(box)PDGCad.chooseCabinet(box);const picks=[['BM617332',0,0],['BC054103',0,6],['BM617116',1,0],['BM617116',1,2],['BM617116',1,4],['BM617120',1,6],['BM617316',1,8],['BZ326471',2,0],['BZ326471',2,3]];const next=picks.flatMap(([sku,r,c])=>{const p=byCode.get(norm(sku));return p&&c+p.modules<=modules&&r<rows?[fromProduct(p,r,c)]:[]});if(next.length){items=next;selected=-1;redraw();showSelection()}renderCabinet()}
 catalogRender=render;
 search.oninput=()=>{limit=24;if(search.value.trim())category='';render()};
-const originalSelection=showSelection;showSelection=function(){originalSelection();const it=items[selected];if(!it?.sku||!$('editName'))return;const p=byCode.get(norm(it.sku)),el=$('selection'),head=document.createElement('div');head.className='electric-selected-product';if(/^https:\/\/image\.schrackcdn\.com\//.test(it.imageUrl||'')){const img=document.createElement('img');img.src=it.imageUrl;img.alt='';head.append(img)}const title=document.createElement('strong');title.textContent=it.sku;head.append(title);el.prepend(head);const detail=document.createElement('p');detail.className='hint';detail.textContent=`${it.widthMm||it.width*18} × ${it.heightMm||'—'} × ${it.depthMm||'—'} mm · ${publicPrice(p)===null?'Цена при запитване':fmt(p.unitPrice)+' без ДДС'+(p.priceSource==='schrack_2026_06'?' · справочна':'')}`;el.append(detail);if(p?.sourceUrl?.startsWith('https://www.schrack.bg/')){const link=document.createElement('a');link.href=p.sourceUrl;link.target='_blank';link.rel='noopener';link.textContent='Данни от производителя ↗';el.append(link)}};
+const originalSelection=showSelection;showSelection=function(){originalSelection();const it=items[selected];if(!it?.sku||!$('editName'))return;const p=byCode.get(norm(it.sku)),el=$('selection'),head=document.createElement('div');head.className='electric-selected-product';if(/^https:\/\/image\.schrackcdn\.com\//.test(it.imageUrl||'')){const img=document.createElement('img');img.src=it.imageUrl;img.alt='';head.append(img)}const title=document.createElement('strong');title.textContent=it.sku;head.append(title);el.prepend(head);const detail=document.createElement('p');detail.className='hint';detail.textContent=`${it.widthMm||it.width*18} × ${it.heightMm||'—'} × ${it.depthMm||'—'} mm · ${publicPrice(p)===null?'Цена при запитване':fmt(p.unitPrice)+' без ДДС'+(p.priceSource==='schrack_2026_06'?' · справочна':'')}`;el.append(detail);const source=p?.specifications?.['Източник за размерите']||p?.sourceUrl;if(/^https:\/\/(?:www\.schrack\.(?:bg|sk)|image\.schrackcdn\.com)\//i.test(source||'')){const link=document.createElement('a');link.href=source;link.target='_blank';link.rel='noopener';link.textContent=p.specifications?.['Източник за размерите']?'Размерен чертеж на Schrack ↗':'Данни от производителя ↗';el.append(link)}};
 window.addEventListener('pdg-cad-change',renderCabinet);
 window.PDGElectricCatalog={find:sku=>byCode.get(norm(sku)),rate:(w,t)=>{const r=rates.find(x=>Number(x.width_mm)===Number(w)&&Number(x.thickness_mm)===Number(t));return r?Number(r.price_per_m_cents)/100:null},online:()=>online,ready:null};
 fetch('database/electrical-source-index.json').then(r=>r.ok?r.json():{}).then(d=>{sourceIndex=d;render()}).catch(()=>{});
@@ -106,7 +106,7 @@ window.PDGElectricCatalog.ready=Promise.all([cadReady,(async()=>{
   if(!Array.isArray(data.products))throw Error();
   await cadReady;
   for(const row of data.products){
-   if(!row.id||!row.code||!row.name||!/^Електроапаратура(?:\s*\/|$)/u.test(row.category))continue;
+   if(!row.id||!row.code||!row.name||!/^Schrack(?: Technik)?$/i.test(row.brand)||!/^Електроапаратура(?:\s*\/|$)/u.test(row.category))continue;
    if(byCode.has(norm(row.code)))continue;
    const p=shopProduct(row);
    products.push(p);indexProduct(p);
