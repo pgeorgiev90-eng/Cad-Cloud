@@ -1,0 +1,119 @@
+name: Publish Schrack breaker dimensions
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-schrack-dimensions-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7ddbc05173dcf76561f0de2a29902d42033b735c
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          ref: cd6176c7f47f6705bf239fd11d4964e569e5f0aa
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: 82174942e20a4d597b34cbaf3f240bc339caaacc
+          path: reviewed
+      - name: Check catalog data and prepare the hosted CAD page
+        run: |
+          sed -e 's/electrical-busbar-core.js?v=wire1/electrical-busbar-core.js?v=shop1/' \
+              -e 's/electrical-catalog.js?v=wire1/electrical-catalog.js?v=shop1/' \
+              -e 's/electrical-quote.js?v=20261105/electrical-quote.js?v=shop1/' \
+              baseline/electrical-cad.php > previous/electrical-cad.php
+          sed 's/electrical-catalog.js?v=shop1/electrical-catalog.js?v=schrack-dim1/' \
+              previous/electrical-cad.php > reviewed/electrical-cad.php
+          php -l reviewed/electrical-cad.php
+          cd reviewed
+          node --check electrical-catalog.js
+          node --test tests/electric-cad-core.test.cjs
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          shop = json.loads(Path('database/schrack-shop-catalog.json').read_bytes())
+          cad = json.loads(Path('database/electrical-catalog.json').read_bytes())['products']
+          codes = {p['code'] for p in shop if 'прекъсвачи' in p['category']}
+          breakers = {p['sku']: p for p in cad if p['type'] in ('MCB', 'MCCB')}
+          assert codes - breakers.keys() == {'MC340232TT', 'MC363232TT'}
+          assert len(breakers) == 439
+          assert all(p['manufacturer'] == 'Schrack Technik' and all(p[k] > 0 for k in ('widthMm', 'heightMm', 'depthMm')) for p in breakers.values())
+          assert all('#page=' in p['specifications']['Източник за размерите'] for p in breakers.values() if p['type']=='MCCB')
+          PY
+      - name: Publish and verify three files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, os, ssl
+          from pathlib import Path
+          paths = [Path('database/electrical-catalog.json'), Path('electrical-catalog.js'), Path('electrical-cad.php')]
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + str(path), buffer.write)
+              return buffer.getvalue()
+          stage = {p: p.with_name('.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + p.name) for p in paths}
+          originals = {p: read(p) for p in paths}
+          for p in paths:
+              if originals[p] not in ((Path('previous') / p).read_bytes(), payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + str(p))
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + str(stage[p]), io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(str(stage[p]), str(p))
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  ftp.storbinary('STOR ' + str(stage[p]), io.BytesIO(originals[p]))
+                  ftp.rename(str(stage[p]), str(p))
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(str(stage[p]))
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify the public catalog and exact breaker variants
+        shell: python
+        run: |
+          import json, time, urllib.request
+          from pathlib import Path
+          def get(path):
+              sep = '&' if '?' in path else '?'
+              with urllib.request.urlopen('https://pdgsystems.bg/' + path + sep + 'deploy_check=' + str(time.time_ns()), timeout=35) as r:
+                  return r.read()
+          for p in ('electrical-catalog.js', 'database/electrical-catalog.json'):
+              assert get(p) == (Path('reviewed') / p).read_bytes(), p
+          expected = json.loads((Path('reviewed') / 'database/electrical-catalog.json').read_bytes())['products']
+          live = {p['sku']: p for p in json.loads(get('api/electric-catalog.php'))['products']}
+          missing = [p['sku'] for p in expected if p['sku'] not in live]
+          assert not missing, missing
+          for p in expected:
+              for k in ('widthMm','heightMm','depthMm','poles'):
+                  assert live[p['sku']][k] == p[k], (p['sku'], k)
+          print('Verified 439 breaker records and exact dimensions in the public CAD API')
