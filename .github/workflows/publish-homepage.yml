@@ -1,0 +1,43 @@
+name: Publish PDG homepage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - assets/solar-cad-homepage.webp
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish homepage and Solar CAD image over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib
+          import os
+          import ssl
+
+          paths = ('assets/solar-cad-homepage.webp', 'index.html')
+          with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
+              ftp.connect(os.environ['FTP_HOST'], 21)
+              ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+              ftp.prot_p()
+              for path in paths:
+                  temporary = f'/{path}.upload'
+                  with open(path, 'rb') as source:
+                      ftp.storbinary(f'STOR {temporary}', source)
+                  ftp.rename(temporary, f'/{path}')
