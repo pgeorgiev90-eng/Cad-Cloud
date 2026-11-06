@@ -6,6 +6,9 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 function pdg_answer(int $code,array $body): void {http_response_code($code);echo json_encode($body,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);exit;}
 function pdg_admin_session(): array {
+  return pdg_account_session(true);
+}
+function pdg_account_session(bool $adminOnly): array {
   if(empty($_SERVER['HTTPS'])||$_SERVER['HTTPS']==='off')pdg_answer(400,['error'=>'https_required']);
   ini_set('session.use_strict_mode','1');ini_set('session.use_only_cookies','1');
   session_name('PDGSESSION');
@@ -22,7 +25,7 @@ function pdg_admin_session(): array {
   $s=require $path;if(!is_array($s))throw new RuntimeException('configuration');
   $db=new PDO('mysql:host='.($s['host']??'localhost').';dbname='.($s['database']??'').';charset=utf8mb4',$s['username']??'',$s['password']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
   $q=$db->prepare('SELECT id,role,is_active FROM pdg_users WHERE id=?');$q->execute([$id]);$user=$q->fetch();
-  if(!$user || (int)$user['is_active']!==1 || $user['role']!=='admin')pdg_answer(403,['error'=>'forbidden']);
+  if(!$user || (int)$user['is_active']!==1 || ($adminOnly && $user['role']!=='admin'))pdg_answer(403,['error'=>'forbidden']);
   if($_SERVER['REQUEST_METHOD']!=='GET'){
     $csrf=$_SERVER['HTTP_X_CSRF_TOKEN']??'';
     if(!is_string($csrf)||!isset($_SESSION['csrf'])||!hash_equals($_SESSION['csrf'],$csrf))pdg_answer(403,['error'=>'invalid_request']);

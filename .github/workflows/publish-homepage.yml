@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - index.html
+      - api/admin-common.php
+      - api/cad-projects.php
+      - cad-account-projects.js
+      - admin-workspace.js
+      - admin-dashboard.html
       - api/contact-enquiries.php
       - contact-enquiries.js
       - admin-electric.js
@@ -33,6 +38,10 @@ jobs:
           php -l api/contact-enquiries.php
           node --check contact-enquiries.js
           node --check admin-electric.js
+          php -l api/admin-common.php
+          php -l api/cad-projects.php
+          node --check cad-account-projects.js
+          node --check admin-workspace.js
       - name: Publish updated website files over FTPS
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -44,7 +53,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
+          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
