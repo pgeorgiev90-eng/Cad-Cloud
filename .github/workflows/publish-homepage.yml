@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - index.html
+      - roof-cad.html
+      - electrical-cad.html
+      - pdg-helper.js
       - assets/solar-cad-homepage.webp
       - assets/electric-cad-homepage.webp
 
@@ -32,7 +35,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'index.html')
+          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'roof-cad.html', 'electrical-cad.html', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
