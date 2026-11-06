@@ -52,3 +52,44 @@ test('invalid busbar geometry is rejected', () => {
   p.busbars = [{width:20,thickness:5,color:'#ffff00',points:[{x:0,y:0,z:0}]}];
   assert.throws(() => busbar.validate(p), /Невалидна геометрия/);
 });
+
+test('valid three-phase terminal wiring with independent poles', () => {
+  const main = {...device('main', 0, 4), poles: 4};
+  const load = {...device('load', 4, 3), poles: 3};
+  const connections = ['L1','L2','L3'].map((phase, pole) =>
+    link(end('main', 'bottom', pole), end('load', 'top', pole), phase));
+  assert.equal(busbar.validate(project([main, load], connections)).connections.length, 3);
+});
+test('reject a wire connected to an out-of-range terminal pole', () => {
+  assert.throws(() => wires.validate([device('a',0), device('b',1)],
+    [link(end('a','bottom',2),end('b','top'))]), /Невалидна връзка/);
+});
+test('reject two selected devices overlapping each other', () => {
+  assert.equal(wires.validGroup([
+    {x:0,y:0,width:2,height:2},{x:1,y:1,width:2,height:2}
+  ], [], 12, 10), false);
+});
+test('reject out-of-bounds selected device', () => {
+  assert.equal(wires.validGroup([{x:11,y:0,width:2,height:1}],[],12,10),false);
+});
+test('valid three-point busbar is accepted', () => {
+  const p=project([]);
+  p.busbars=[{width:20,thickness:5,color:'#ffff00',points:[
+    {x:0,y:0,z:0},{x:100,y:0,z:0},{x:100,y:100,z:0}
+  ]}];
+  assert.equal(busbar.validate(p).busbars.length,1);
+});
+test('DWG block extraction groups identical equipment and preserves quantities', async () => {
+  const fs=require('node:fs');
+  const src=fs.readFileSync(require.resolve('../electrical-dwg-data.js'),'utf8');
+  const {equipmentFromDwg}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+  const block={type:'INSERT',name:'MCB-C16',attribs:[
+    {tag:'SKU',text:{text:'SCHRACK-12345'}},
+    {tag:'RATING',text:{text:'C16'}}
+  ]};
+  const result=equipmentFromDwg({entities:[block,block,{type:'LINE'}]});
+  assert.equal(result.blocks,2);
+  assert.equal(result.rows.length,1);
+  assert.equal(result.rows[0].count,2);
+  assert.ok(result.rows[0].codes.includes('SCHRACK-12345'));
+});
