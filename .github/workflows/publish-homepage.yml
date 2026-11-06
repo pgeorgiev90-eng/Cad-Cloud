@@ -6,6 +6,9 @@ on:
     paths:
       - .github/workflows/publish-homepage.yml
       - index.html
+      - assets/shop-solar-components.webp
+      - assets/shop-electrical-equipment.webp
+      - assets/shop-cables-accessories.webp
       - api/cad-page-access.php
       - api/account-draft.php
       - api/registration-draft.php
@@ -68,7 +71,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'api/cad-page-access.php', 'api/account-draft.php', 'api/registration-draft.php', 'auth.html', 'account-draft.html', 'verify-account.html', 'roof-cad.php', 'electrical-cad.php', 'solar-cad.webmanifest', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
+          paths = ('assets/shop-solar-components.webp', 'assets/shop-electrical-equipment.webp', 'assets/shop-cables-accessories.webp', 'shop.html', 'assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'api/cad-page-access.php', 'api/account-draft.php', 'api/registration-draft.php', 'auth.html', 'account-draft.html', 'verify-account.html', 'roof-cad.php', 'electrical-cad.php', 'solar-cad.webmanifest', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
