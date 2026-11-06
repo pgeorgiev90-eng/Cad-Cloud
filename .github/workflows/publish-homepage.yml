@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - index.html
+      - api/contact-enquiries.php
+      - contact-enquiries.js
+      - admin-electric.js
+      - admin-electric.html
       - roof-cad.html
       - electrical-cad.html
       - pdg-helper.js
@@ -24,7 +28,12 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Publish homepage and CAD images over FTPS
+      - name: Check enquiry form
+        run: |
+          php -l api/contact-enquiries.php
+          node --check contact-enquiries.js
+          node --check admin-electric.js
+      - name: Publish updated website files over FTPS
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER }}
@@ -35,7 +44,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'roof-cad.html', 'electrical-cad.html', 'index.html')
+          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
