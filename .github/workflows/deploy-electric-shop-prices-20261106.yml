@@ -1,0 +1,151 @@
+name: Publish Electric CAD shop prices
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-electric-shop-prices-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: pdg_cad
+          MYSQL_ROOT_HOST: '%'
+        ports: ['3306:3306']
+        options: --health-cmd="mysqladmin ping" --health-interval=5s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fa3a6c27e26a6ea829077a782bf192d6d1125e37
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: 9a1674106c54835b6cc0e01ab98a0701a4d56e83
+          path: reviewed
+      - name: Verify the reviewed changes
+        working-directory: reviewed
+        run: |
+          set -e
+          php -l electrical-cad.php
+          php -l api/electric-common.php
+          php <<'PHPTEST'
+          <?php
+          require 'api/electric-common.php';
+          $db=new PDO('mysql:host=127.0.0.1;dbname=pdg_cad;charset=utf8mb4','root','ci-only-password');
+          $db->exec(file_get_contents('database/schema.sql'));
+          electric_bootstrap($db);
+          $q=$db->prepare("INSERT INTO products (brand,category,code,name,price) VALUES ('Schrack Technik','Електроапаратура / Автомати',?,?,?)");
+          $q->execute(['MX110231--','MX1','89.39']);
+          $q->execute(['SHOP-ONLY','Магазинен артикул','10.00']);
+          $input=['parts'=>[['sku'=>'WSA8060260','quantity'=>1],['sku'=>'MX110231--','quantity'=>2],['sku'=>'SHOP-ONLY','quantity'=>1]]];
+          $quote=electric_materials($db,$input);
+          if($quote['lines'][1]['line_cents']!==17878||$quote['lines'][2]['line_cents']!==1000)throw new Exception('Store pricing mismatch');
+          $db->exec("UPDATE products SET price=NULL WHERE code='MX110231--'");
+          if(electric_materials($db,$input)['lines'][1]['unit_cents']!==null)throw new Exception('Missing store price was replaced');
+          PHPTEST
+          for file in electrical-busbar.js electrical-schematic-symbols.js electrical-cad-design.js solar-offer.js; do node --check "$file"; done
+          for file in tests/*.js tests/*.cjs; do node "$file"; done
+      - name: Publish and verify CAD files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, os, ssl, subprocess, tempfile
+          from pathlib import Path
+          paths = ['api/electric-common.php','electrical-catalog.js','electrical-quote.js','electrical-cad.php']
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          stage = {p: str(Path(p).with_name('.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + Path(p).name)) for p in paths}
+          originals = {}
+          for p in paths:
+              old_file = Path('previous') / p
+              expected = old_file.read_bytes() if old_file.exists() else None
+              try:
+                  old = read(p)
+              except ftplib.error_perm as error:
+                  if expected is not None or not str(error).startswith('550'):
+                      raise
+                  old = None
+              if p == 'electrical-cad.php' and old != payload[p]:
+                  updates = {
+                      'electrical-cad.php': [
+                          (b'electrical-catalog.js?v=schematic2', b'electrical-catalog.js?v=shopprices2'),
+                          (b'electrical-quote.js?v=shop1', b'electrical-quote.js?v=shopprices2'),
+                      ],
+                  }
+                  candidate = old
+                  for before, after in updates[p]:
+                      if candidate.count(after) == 1 and candidate.count(before) == 0:
+                          continue
+                      if candidate.count(before) != 1 or after in candidate:
+                          raise RuntimeError(f'Unexpected deployed reference in {p}: {before!r}')
+                      candidate = candidate.replace(before, after)
+                  with tempfile.NamedTemporaryFile(suffix='.php') as temp:
+                      temp.write(candidate)
+                      temp.flush()
+                      subprocess.run(['php', '-l', temp.name], check=True)
+                  payload[p] = candidate
+              elif old not in (expected, payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+              originals[p] = old
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(stage[p], p)
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  if originals[p] is None:
+                      ftp.delete(p)
+                      continue
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(originals[p]))
+                  ftp.rename(stage[p], p)
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(stage[p])
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify live pricing assets and catalog records
+        shell: python
+        run: |
+          import json, time, urllib.request
+          from pathlib import Path
+          def get(path):
+              sep = '&' if '?' in path else '?'
+              with urllib.request.urlopen('https://pdgsystems.bg/' + path + sep + 'release=' + str(time.time_ns()), timeout=30) as r:
+                  return r.read()
+          for name in ('electrical-catalog.js','electrical-quote.js'):
+              assert get(name + '?v=shopprices2') == (Path('reviewed') / name).read_bytes(), name
+          products = {row['code']:row for row in json.loads(get('api/products.php'))['products']}
+          cad = {row['sku'] for row in json.loads(get('api/electric-catalog.php'))['products']}
+          for sku in ('MX110231--','MX110241--','MX110431--','MX110441--','MX112231--'):
+              assert sku in cad and float(products[sku]['price']) > 0, sku
+              print(sku, products[sku]['price'])
