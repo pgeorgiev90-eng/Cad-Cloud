@@ -42,6 +42,15 @@ on:
       - verify-account.html
       - roof-cad.php
       - electrical-cad.php
+      - electrical-busbar-core.js
+      - electrical-busbar.js
+      - electrical-connections.js
+      - electrical-device-face.js
+      - electrical-cad-design.css
+      - electrical-catalog.js
+      - electrical-dwg-data.js
+      - electrical-dwg-worker.js
+      - electrical-dwg-import.js
       - solar-cad.webmanifest
       - api/admin-common.php
       - api/cad-projects.php
@@ -88,6 +97,16 @@ jobs:
           php -l api/registration-draft.php
           php -l roof-cad.php
           php -l electrical-cad.php
+          node --check electrical-busbar-core.js
+          node --check electrical-busbar.js
+          node --check electrical-connections.js
+          node --check electrical-device-face.js
+          node --check electrical-catalog.js
+          node --check electrical-dwg-data.js
+          node --check electrical-dwg-worker.js
+          node --check electrical-dwg-import.js
+          node tests/electrical_busbar_test.js
+          node tests/electrical_connections_test.cjs
           node --check cad-account-projects.js
           node --check admin-workspace.js
       - name: Publish updated website files over FTPS
@@ -101,7 +120,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('api/enquiry-inbox.php', 'api/admin-site-metrics.php', 'api/site-metrics-common.php', 'api/site-metrics.php', 'site-metrics.js', 'site-metrics.css', 'store.js', 'cart.html', 'catalog.html', 'product.html', 'catalog-sections.js', 'assets/pdg-systems-logo.svg', 'cart.html', 'product.html', 'catalog.html', 'profile-preview.html', 'solar-cad-preview.html', 'admin-orders.html', 'admin-preview.html', 'admin-products-draft.html', 'setup-admin-draft.html', 'maps-designer.html', 'roof-editor.html', 'legacy-editor.html', 'assets/shop-solar-components.webp', 'assets/shop-electrical-equipment.webp', 'assets/shop-cables-accessories.webp', 'shop.html', 'assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'api/cad-page-access.php', 'api/account-draft.php', 'api/registration-draft.php', 'auth.html', 'account-draft.html', 'verify-account.html', 'roof-cad.php', 'electrical-cad.php', 'solar-cad.webmanifest', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
+          paths = ('electrical-busbar-core.js', 'electrical-busbar.js', 'electrical-connections.js', 'electrical-device-face.js', 'electrical-cad-design.css', 'electrical-catalog.js', 'electrical-dwg-data.js', 'electrical-dwg-worker.js', 'electrical-dwg-import.js', 'api/enquiry-inbox.php', 'api/admin-site-metrics.php', 'api/site-metrics-common.php', 'api/site-metrics.php', 'site-metrics.js', 'site-metrics.css', 'store.js', 'cart.html', 'catalog.html', 'product.html', 'catalog-sections.js', 'assets/pdg-systems-logo.svg', 'cart.html', 'product.html', 'catalog.html', 'profile-preview.html', 'solar-cad-preview.html', 'admin-orders.html', 'admin-preview.html', 'admin-products-draft.html', 'setup-admin-draft.html', 'maps-designer.html', 'roof-editor.html', 'legacy-editor.html', 'assets/shop-solar-components.webp', 'assets/shop-electrical-equipment.webp', 'assets/shop-cables-accessories.webp', 'shop.html', 'assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'api/cad-page-access.php', 'api/account-draft.php', 'api/registration-draft.php', 'auth.html', 'account-draft.html', 'verify-account.html', 'roof-cad.php', 'electrical-cad.php', 'solar-cad.webmanifest', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])

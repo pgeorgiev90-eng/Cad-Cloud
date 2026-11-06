@@ -3,3 +3,14 @@
 .electric-schrack{margin:10px 0 8px;color:#0646ae;font-weight:900;font-style:italic;border:1px solid #c5d2e8;border-radius:5px;padding:7px 11px;letter-spacing:.2px}.electric-categories{display:grid;gap:3px;margin:10px 0}.electric-categories button{text-align:left;background:#f4f7fd;border-color:#d6e0ef;font-size:11px;font-weight:700}.electric-current{outline:1px solid #125afb;background:#e9f1ff!important;color:#123c85!important}.electric-product{display:grid!important;grid-template-columns:50px 1fr 25px;gap:7px;align-items:center;min-height:92px;text-align:left;padding:8px!important}.electric-product img{width:50px;height:68px;object-fit:contain}.electric-product strong{display:block;font-size:11px;line-height:1.25}.electric-product small{display:block;font-size:10px;color:#546784;margin-top:3px}.electric-product .cad-plus{padding:2px 5px}.electric-selected-product{display:flex;align-items:center;gap:9px}.electric-selected-product img{width:54px;height:65px;object-fit:contain}.layout aside details{margin:10px 0;font-size:11px;color:#405579}.layout aside details summary{cursor:pointer}#catalogStatus{margin:10px 0}.canvas{padding:8px 15px}.canvas svg{min-width:440px;max-height:calc(100vh - 265px);width:auto;max-width:100%}.cad-project-settings #electricCabinetCard p{margin:8px 0}.electric-estimate-contact{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-top:1px solid #cfdaed;margin-top:14px}.electric-estimate-contact p{grid-column:1/-1}.electric-estimate-contact label{display:flex;flex-direction:column;gap:6px}#enquiryStatus{color:#14539c;font-size:12px}.quote-actions{flex-wrap:wrap}@media(max-width:800px){.canvas svg{max-height:none;width:100%;min-width:420px}.electric-estimate-contact{grid-template-columns:1fr}}
 
 .electric-product:hover strong,.electric-product.electric-current strong{color:#112144!important}.electric-product img{background:#fff}.canvas{overflow:auto}.cad-project-settings h3{margin:5px 0 8px}
+#drawConnection[aria-pressed="true"]{background:#087dc2;color:#fff;border-color:#087dc2}
+#drawing [data-terminal]{cursor:crosshair}
+#drawing [data-terminal]:focus-visible{stroke:#0341b6;stroke-width:3}
+.cad-wire-list,.cad-dwg-import{margin-block:12px}
+.cad-wire-list p,.cad-dwg-import li{font-size:13px;overflow-wrap:anywhere}
+.cad-dwg-import ul{padding-left:18px}
+.cad-dwg-import button{margin:4px 0}
+
+#markDeviceGroup[aria-pressed="true"]{background:#1046ef;color:#fff;border-color:#1046ef}
+.cad-wire-phase{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.cad-wire-phase select,.cad-wire-list select{width:auto;margin:0}
