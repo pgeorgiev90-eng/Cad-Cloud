@@ -43,9 +43,9 @@ function armProduct(p){
   return;
  }
  if(p.type==='ENCLOSURE'){PDGCad.chooseCabinet(p);renderCabinet();return}
- if(view!=='front')setView('front');
+ if(view!=='front'&&view!=='schematic')setView('front');
  selectedCatalog=p;PDGCad.arm();
- $('status').textContent='Избран '+p.sku+' — щракни в таблото, за да го поставиш.';
+ $('status').textContent='Избран '+p.sku+(view==='schematic'?' — щракни върху схемата.':' — щракни в таблото, за да го поставиш.');
 }
 const sizeDialog=document.createElement('dialog');
 sizeDialog.innerHTML='<form><h2>Размери за монтаж</h2><p></p><label>Ширина (mm) <input type="number" step="any" required></label><br><label>Височина (mm) <input type="number" step="any" required></label><br><label>Дълбочина (mm) <input type="number" step="any" required></label><p><button type="submit" class="primary">Избери за монтаж</button> <button type="button">Отказ</button></p></form>';

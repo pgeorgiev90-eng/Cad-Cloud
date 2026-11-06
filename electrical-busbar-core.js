@@ -1,6 +1,7 @@
 (function(root){
 'use strict';
 const finite=(n,min,max)=>typeof n==='number'&&Number.isFinite(n)&&n>=min&&n<=max;
+const schematicPoint=p=>p&&finite(p.x,0,100000)&&finite(p.y,0,100000);
 function point(p){return p&&finite(p.x,0,1600)&&finite(p.y,0,2400)&&finite(p.z,0,300)}
 const defaultCabinet={sku:'',widthMm:600,heightMm:800,depthMm:260};
 const widthOf=item=>item.widthMm??item.width*18;
@@ -23,8 +24,15 @@ function validate(data){
  if(d.dinRails!==undefined&&(!Array.isArray(d.dinRails)||d.dinRails.length>30||d.dinRails.some(rail=>
      !rail||!finite(rail.x,0,geometry.width)||!finite(rail.y,0,geometry.height-12)||
      !finite(rail.width,1,geometry.width-rail.x))))throw Error('DIN шина извън монтажната плоча.');
+ if(d.schematicNotes!==undefined&&(!Array.isArray(d.schematicNotes)||d.schematicNotes.length>200||
+    d.schematicNotes.some(n=>!schematicPoint(n)||typeof n.text!=='string'||n.text.length>120))){
+  throw Error('Невалидна бележка в еднолинейната схема.');
+ }
  const rectangles=[];
  d.items.forEach(it=>{const freePosition=d.mode==='free'&&it.x!==undefined;if(!['MCB','RCD','RCBO','SPD','MAIN','CONTACT','METER','BLANK','CAT'].includes(it.type)||!finite(it.width,1,freePosition?Math.ceil(1600/18):36)||!Number.isInteger(it.row)||!Number.isInteger(it.col)||it.row<0||it.row>=d.rows||it.col<0||(!freePosition&&it.col+it.width>d.modules))throw Error('Апарат извън таблото');if(it.x!==undefined&&(!finite(it.x,0,1600)||!finite(it.y,0,2400)))throw Error('Невалидна монтажна позиция');if(it.unitPrice!==undefined&&it.unitPrice!==null&&!finite(it.unitPrice,0,1e9))throw Error('Невалидна цена');it.name=String(it.name||'Апарат').slice(0,200);it.rating=String(it.rating||'').slice(0,100);
+  if(it.schematic!==undefined&&(!schematicPoint(it.schematic)||it.schematic.y<100)){
+   throw Error('Невалидна позиция в еднолинейната схема.');
+  }
   const {x,y}=position(it,d.mode,geometry),width=widthOf(it),height=heightOf(it);
   if(!finite(width,.1,1600)||!finite(height,.1,2400)||
      (it.depthMm!==undefined&&!finite(it.depthMm,.1,cabinet.depthMm))||
@@ -39,6 +47,10 @@ function validate(data){
  d.busbars.forEach(b=>{if(!Array.isArray(b.points)||b.points.length<2||b.points.length>500||!b.points.every(p=>point(p)&&p.x<=geometry.width&&p.y<=geometry.height&&p.z<=cabinet.depthMm)||!finite(b.width,2,100)||!finite(b.thickness,1,20)||!/^#[0-9a-f]{6}$/i.test(b.color))throw Error('Невалидна геометрия на шина');b.holes=b.holes||[];if(!Array.isArray(b.holes)||!b.holes.every(h=>Number.isInteger(h.index)&&h.index>=0&&h.index<b.points.length&&finite(h.diameter,2,30)))throw Error('Невалиден отвор')});
  const wires=typeof module!=="undefined"?require("./electrical-connections.js"):root.PDGConnections;
  wires.validate(d.items,d.connections,d.busbars);
+ if(d.connections?.some(w=>[['schematicBends',24],['schematicGaps',300]].some(([key,max])=>
+     w[key]!==undefined&&(!Array.isArray(w[key])||w[key].length>max||!w[key].every(schematicPoint))))){
+  throw Error('Невалидно трасе в еднолинейната схема.');
+ }
  if(d.connections?.some(wire=>wire.channelY!==undefined&&(wire.channelY<6||wire.channelY>geometry.height-6))){
   throw Error('Каналът на проводника е извън монтажната плоча.');
  }

@@ -143,9 +143,10 @@ function connect(entry) {
     if(bar)phaseSelect.value=bar.phase;
     if (!wireStart) {
         wireStart=end;
-        status('Избрана ' + terminalName(end) + (view==='schematic'?'. Посочи крайна клема.':'. Посочи клема, шина или щракни за чупка.'));
+        status('Избрана ' + terminalName(end) + (view==='schematic'?'. Добави чупка или посочи крайна клема.':'. Посочи клема, шина или щракни за чупка.'));
     } else {
         const connection={from:wireStart,to:end,bends:wireBends,phase:phaseSelect.value};
+        if(view==='schematic'&&schematicBends.length)connection.schematicBends=schematicBends;
         if(channelY!==undefined)Object.assign(connection,{id:crypto.randomUUID(),channelY});
         if(branchDraft)Object.assign(connection,branchDraft);
         if(channelY===undefined&&!guideOrtho.checked)connection.freeAngle=true;
@@ -155,6 +156,10 @@ function connect(entry) {
             wireStart=null;wireBends=[];channelY=undefined;branchDraft=null;branching=false;
             status('Връзката е записана. Можеш да започнеш следваща.');
         } catch (error) { status(error.message); }
+    }
+    if(view==='schematic'){
+        schematicHint.textContent=$('status').textContent;
+        if(!wireStart)schematicBends=[];
     }
     redraw();
 }
@@ -535,54 +540,166 @@ $('drawing').addEventListener('click',event=>{
     status('Маркирани апарати: '+marked.size);
     redraw();
 },true);
-let schematicWiring=false;
+let schematicTool='select', schematicBends=[], schematicNotes=[], selectedNote=-1;
+let schematicDrag=null, schematicMoved=false;
 const schematicToolbar=document.createElement('div');
 schematicToolbar.className='toolbar schematic-toolbar';
 schematicToolbar.hidden=true;
 toolbar.after(schematicToolbar);
-const schematicSelect=button(schematicToolbar,'Избор',()=>setSchematicTool(false));
-const schematicConnect=button(schematicToolbar,'Връзка',()=>setSchematicTool(true));
-function setSchematicTool(connecting) {
-    schematicWiring=connecting;
-    wireStart=null;
-    status(connecting?'Избери начална и крайна клема.':'Избери апарат за преглед.');
+const schematicTools=new Map();
+for(const [id,label] of [['select','Избор'],['symbol','Символ'],['wire','Връзка'],['junction','Възел'],['crossover','Прескок'],['text','Текст']]){
+    schematicTools.set(id,button(schematicToolbar,label,()=>setSchematicTool(id)));
+}
+button(schematicToolbar,'↶',()=>undoButton.click()).setAttribute('aria-label','Отмени');
+button(schematicToolbar,'↷',()=>redoButton.click()).setAttribute('aria-label','Повтори');
+button(schematicToolbar,'−',()=>setZoom(zoom/1.25)).setAttribute('aria-label','Намали');
+button(schematicToolbar,'+',()=>setZoom(zoom*1.25)).setAttribute('aria-label','Увеличи');
+button(schematicToolbar,'Изчисти апаратите',()=>$('clear').click());
+button(schematicToolbar,'Запази в акаунта',()=>$('save-account-project').click());
+const accountStatus=$('account-project-status');
+new MutationObserver(()=>{if(view==='schematic')schematicHint.textContent=accountStatus.textContent;})
+    .observe(accountStatus,{childList:true,characterData:true,subtree:true});
+const schematicPhase=phaseSelect.cloneNode(true);
+schematicPhase.removeAttribute('id');
+schematicPhase.setAttribute('aria-label','Фаза на връзката');
+schematicPhase.addEventListener('change',()=>{phaseSelect.value=schematicPhase.value;redraw();});
+schematicToolbar.append(schematicPhase);
+const schematicText=document.createElement('input');
+schematicText.placeholder='Текст на бележката';
+schematicText.setAttribute('aria-label','Текст на бележката');
+schematicText.maxLength=120;
+schematicToolbar.append(schematicText);
+const schematicHint=document.createElement('span');
+schematicHint.setAttribute('role','status');
+schematicToolbar.append(schematicHint);
+const schematicHints={
+    select:'Премести символ с плъзгане. Избери връзка или бележка за изтриване.',
+    symbol:'Избери апарат от каталога или палитрата, после щракни върху листа.',
+    wire:'Избери начална клема, точки за чупки и крайна клема.',
+    junction:'Избери вече свързана клема, после крайна клема за отклонението.',
+    crossover:'Щракни върху пресичане, за да смениш означението между дъга и прекъсване.',
+    text:'Въведи бележка и щракни върху листа.',
+};
+function setSchematicTool(next) {
+    schematicTool=next;
+    wireStart=null;schematicBends=[];selectedNote=-1;
+    if(next==='symbol')placing=false;
+    schematicHint.textContent=schematicHints[next];
     redraw();
+}
+function schematicPoint(event){
+    const svg=$('drawing');
+    const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());
+    return {x:Math.max(0,Math.min(100000,Math.round(point.x))),y:Math.max(0,Math.min(100000,Math.round(point.y)))};
+}
+function placeSchematic(point){
+    const product=selectedCatalog, definition=types[tool];
+    if(point.y<100){schematicHint.textContent='Избери позиция в работната зона под заглавието.';return;}
+    if(!placing||(!product&&!definition))return;
+    const item={type:product?'CAT':tool,width:product?.modules??definition[1],row:0,col:0,
+        name:product?.name??definition[0],rating:product?.rating??definition[2],sku:product?.sku||'',
+        manufacturer:product?.manufacturer||'',unitPrice:product?.unitPrice??null,...deviceMeta(product),
+        schematic:{x:point.x,y:Math.max(100,point.y)}};
+    const positions=mode==='din'
+        ?Array.from({length:rows*modules},(_,i)=>({row:Math.floor(i/modules),col:i%modules}))
+        :[...new Set([0,...items.map(other=>position(other).y+heightOf(other))])].flatMap(y=>
+            [...new Set([0,...items.map(other=>position(other).x+widthOf(other))])].map(x=>({x,y})));
+    for(const pos of positions){
+        if(mode==='din'&&!fits(pos.row,pos.col,item.width))continue;
+        const candidate={...item,...pos};
+        try{C.validate({...data(),items:[...items,candidate]});}
+        catch{continue;}
+        items.push(candidate);selected=items.length-1;
+        schematicHint.textContent='Символът е поставен. Избери „Връзка“, за да го свържеш.';
+        redraw();showSelection();return;
+    }
+    schematicHint.textContent='Апаратът не се побира в таблото. Избери по-голям корпус или освободи място.';
+}
+const schematicSvg=$('drawing');
+schematicSvg.addEventListener('click',event=>{
+    if(view!=='schematic'||schematicMoved||event.target.closest('[data-schematic-device],[data-schematic-terminal],[data-schematic-wire],[data-schematic-note],[data-schematic-crossing]'))return;
+    const point=schematicPoint(event);
+    if(schematicTool==='symbol')placeSchematic(point);
+    if((schematicTool==='wire'||schematicTool==='junction')&&wireStart&&schematicBends.length<24){
+        schematicBends.push(point);redraw();
+    }
+    if(schematicTool==='text'&&schematicText.value.trim()&&schematicNotes.length<200){
+        schematicNotes.push({...point,text:schematicText.value.trim()});
+        schematicText.value='';redraw();
+    }
+});
+schematicSvg.addEventListener('pointerup',event=>{
+    if(!schematicDrag)return;
+    const {item,start,origin}=schematicDrag;
+    schematicDrag=null;
+    const end=schematicPoint(event);
+    if(Math.hypot(end.x-start.x,end.y-start.y)<4){redraw();return;}
+    item.schematic={x:Math.max(0,Math.min(100000,origin.x+end.x-start.x)),
+        y:Math.max(100,Math.min(100000,origin.y+end.y-start.y))};
+    schematicMoved=true;setTimeout(()=>{schematicMoved=false;},0);
+    redraw();
+});
+schematicSvg.addEventListener('pointercancel',()=>{schematicDrag=null;});
+function schematicRoute(a,b,bends){
+    const points=[a];
+    for(const next of [...bends,b]){
+        const last=points.at(-1);
+        if(last.x!==next.x&&last.y!==next.y)points.push({x:next.x,y:last.y});
+        if(last.x!==next.x||last.y!==next.y)points.push(next);
+    }
+    return points;
 }
 function renderConnectionsSchematic() {
     const svg=$('drawing');
     svg.replaceChildren();
     const blocks=items.map((item,index)=>({item,index,width:Math.max(132,W.poleCount(item)*28)}));
     let x=44;
-    for(const block of blocks){block.x=x;x+=block.width+18;}
+    for(const block of blocks){
+        block.x=block.item.schematic?.x??x;
+        block.y=block.item.schematic?.y??100;
+        x+=block.width+18;
+    }
     const linkedBars=bars.filter(b=>b.id&&connections.some(link=>link.from.bar===b.id||link.to.bar===b.id));
     const barColumns=linkedBars.map(bar=>{const column=x;x+=115;return {bar,column};});
-    const width=Math.max(670,x+25),height=Math.max(350,240+connections.length*16);
+    const waypoints=connections.flatMap(link=>link.schematicBends||[]);
+    const width=Math.max(900,x+25,...blocks.map(b=>b.x+b.width+40),...[...schematicNotes,...waypoints].map(p=>p.x+180));
+    const lane=Math.max(213,...blocks.map(b=>b.y+113));
+    const height=Math.max(550,lane+50+connections.length*16,...[...schematicNotes,...waypoints].map(p=>p.y+50));
     svg.setAttribute('width',width);svg.setAttribute('height',height);svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+    const grid=node('pattern',{id:'schematic-grid',width:20,height:20,patternUnits:'userSpaceOnUse'});
+    node('circle',{cx:1,cy:1,r:.8,fill:'#cbd6e4'},grid);
     node('rect',{x:0,y:0,width,height,fill:'#fff'});
+    node('rect',{x:0,y:85,width,height:height-85,fill:'url(#schematic-grid)'});
     txt(44,42,'Еднолинейна схема',23);
     txt(44,69,'Г = горна клема · Д = долна клема · Дъга = пресичане без връзка · Точка = обща клема',13);
     const ends=new Map(), nodes=[];
-    for(const {item,index,x,width} of blocks){
+    for(const {item,index,x,y,width} of blocks){
         const type=item.catalogType||item.type;
         const symbols=window.PDGSchematicSymbols;
         const catalogQ=symbols.schrackQ.has(String(item.sku||'').toUpperCase());
         const designation=item.designation||(catalogQ||symbols.paths[type]?'Q':'X')+(index+1);
         const body=node('g',{style:'cursor:pointer','data-schematic-device':index,'aria-label':designation});
-        node('rect',{x,y:92,width,height:72,rx:5,fill:selected===index?'#edf4ff':'#fff',stroke:'#ccd9e6'},body);
-        if(symbols.paths[type]) node('path',{d:symbols.paths[type],transform:`translate(${x+25} 127)`,fill:'none',stroke:'#182e46','stroke-width':1.7},body);
-        const label=node('text',{x:x+48,y:119,fill:'#182e46','font-size':13},body);
+        node('rect',{x,y:y-8,width,height:72,rx:5,fill:selected===index?'#edf4ff':'#fff',stroke:'#ccd9e6'},body);
+        if(symbols.paths[type]) node('path',{d:symbols.paths[type],transform:`translate(${x+25} ${y+27})`,fill:'none',stroke:'#182e46','stroke-width':1.7},body);
+        const label=node('text',{x:x+48,y:y+19,fill:'#182e46','font-size':13},body);
         label.textContent=designation+' · '+type;
-        const detail=node('text',{x:x+48,y:139,fill:'#455a72','font-size':10},body);
+        const detail=node('text',{x:x+48,y:y+39,fill:'#455a72','font-size':10},body);
         detail.textContent=(item.sku||item.rating||'').slice(0,16);
         if(catalogQ) node('title',{},body).textContent='Schrack Technik · каталожно обозначение Q';
-        body.addEventListener('click',()=>{selected=index;selectedWire=null;showSelection();redraw();});
+        body.addEventListener('pointerdown',event=>{
+            if(schematicTool!=='select'||event.button!==0)return;
+            schematicDrag={item,start:schematicPoint(event),origin:{x,y}};
+            svg.setPointerCapture(event.pointerId);
+            selected=index;selectedWire=null;selectedNote=-1;showSelection();
+        });
+        body.addEventListener('click',()=>{if(schematicMoved||schematicTool!=='select')return;selected=index;selectedWire=null;selectedNote=-1;showSelection();redraw();});
         const poles=W.poleCount(item);
         ['top','bottom'].forEach((side,group)=>{
             for(let pole=0;pole<poles;pole++){
                 const px=x+width*(group*poles+pole+.5)/(poles*2);
                 const end={device:item.connectionId,side,pole};
-                if(item.connectionId) ends.set(W.key(end),px);
-                nodes.push({px,end,index,label:(group?'Д':'Г')+(pole+1)});
+                if(item.connectionId) ends.set(W.key(end),{x:px,y:y+88});
+                nodes.push({px,py:y+88,end,index,label:(group?'Д':'Г')+(pole+1)});
             }
         });
     }
@@ -590,39 +707,104 @@ function renderConnectionsSchematic() {
         node('rect',{x:column,y:92,width:100,height:72,rx:5,fill:'#edf4fa',stroke:W.phases[bar.phase].color});
         txt(column+8,128,'Шина '+bar.phase,13);
         for(const link of connections) for(const end of [link.from,link.to]){
-            if(end.bar===bar.id) ends.set(W.key(end),column+50);
+            if(end.bar===bar.id) ends.set(W.key(end),{x:column+50,y:188});
         }
     }
-    const tracks=connections.map((link,index)=>({link,a:ends.get(W.key(link.from)),b:ends.get(W.key(link.to)),y:213+index*16}))
-        .filter(({a,b})=>a!==undefined&&b!==undefined);
-    const degree=new Map(), crossovers=[];
-    for(const {link,a,b,y} of tracks){
-        const vertical=(x)=>{
-            const crossings=tracks.filter(t=>t.y<y&&x>Math.min(t.a,t.b)+5&&x<Math.max(t.a,t.b)-5);
-            return crossings.map(t=>{
-                crossovers.push({link,d:`M ${x} ${t.y-5} A 5 5 0 0 1 ${x} ${t.y+5}`});
-                return `V ${t.y-5} M ${x} ${t.y+5}`;
-            }).join(' ');
-        };
-        wireShape('path',{d:`M ${a} 188 ${vertical(a)} V ${y} H ${b} M ${b} 188 ${vertical(b)} V ${y}`},link,2);
+    const tracks=connections.flatMap((link,index)=>{
+        const a=ends.get(W.key(link.from)),b=ends.get(W.key(link.to));
+        if(!a||!b)return [];
+        const y=lane+index*16;
+        const points=schematicRoute(a,b,link.schematicBends?.length?link.schematicBends:[{x:a.x,y},{x:b.x,y}]);
+        return [{link,index,points}];
+    });
+    const degree=new Map(),crossovers=[];
+    const horizontal=tracks.flatMap(track=>track.points.slice(1).flatMap((b,i)=>{
+        const a=track.points[i];
+        return a.y===b.y?[{a,b,track}]:[];
+    }));
+    for(const track of tracks){
+        const {link,points,index}=track;
+        let d=`M ${points[0].x} ${points[0].y}`;
+        for(const [i,b] of points.slice(1).entries()){
+            const a=points[i];
+            if(a.x===b.x){
+                const dir=Math.sign(b.y-a.y),x=b.x;
+                const intersections=new Set(horizontal.filter(h=>h.track.index!==index&&
+                    x>Math.min(h.a.x,h.b.x)+5&&x<Math.max(h.a.x,h.b.x)-5&&
+                    h.a.y>Math.min(a.y,b.y)+5&&h.a.y<Math.max(a.y,b.y)-5).map(h=>h.a.y));
+                for(const y of [...intersections].sort((p,q)=>dir*(p-q))){
+                    const from=y-dir*5,to=y+dir*5;
+                    d+=` V ${from} M ${x} ${to}`;
+                    crossovers.push({link,x,y,d:`M ${x} ${from} A 5 5 0 0 ${dir>0?1:0} ${x} ${to}`});
+                }
+            }
+            d+=` L ${b.x} ${b.y}`;
+        }
+        wireShape('path',{d},link,selectedWire===link?4:2);
+        if(schematicTool==='select'){
+            const hit=node('path',{d,fill:'none',stroke:'transparent','stroke-width':12,'data-schematic-wire':index,style:'cursor:pointer'});
+            hit.addEventListener('click',()=>{selectedWire=link;selected=-1;selectedNote=-1;redraw();showSelection();});
+        }
         for(const end of [link.from,link.to]) degree.set(W.key(end),(degree.get(W.key(end))||0)+1);
     }
-    for(const {link,d} of crossovers){
-        node('path',{d,fill:'none',stroke:'#fff','stroke-width':6,'pointer-events':'none'});
-        wireShape('path',{d},link,2);
+    for(const {link,d,x,y} of crossovers){
+        if(!link.schematicGaps?.some(p=>p.x===x&&p.y===y)){
+            node('path',{d,fill:'none',stroke:'#fff','stroke-width':6,'pointer-events':'none'});
+            wireShape('path',{d},link,2);
+        }
+        if(schematicTool==='crossover'){
+            const hit=node('circle',{cx:x,cy:y,r:9,fill:'transparent',style:'cursor:pointer','data-schematic-crossing':''});
+            hit.addEventListener('click',()=>{
+                const gaps=link.schematicGaps||[];
+                link.schematicGaps=gaps.some(p=>p.x===x&&p.y===y)?gaps.filter(p=>p.x!==x||p.y!==y):[...gaps.slice(-299),{x,y}];
+                redraw();
+            });
+        }
     }
-    for(const {px,end,index,label} of nodes){
+    for(const {px,py,end,index,label} of nodes){
         const key=W.key(end);
-        txt(px-5,176,label,8);
+        txt(px-5,py-12,label,8);
         const active=Boolean(wireStart&&end.device&&W.key(wireStart)===key);
-        const terminal=node('circle',{cx:px,cy:188,r:active?5:3,fill:active?'#0057ff':degree.get(key)>1?'#182e46':'#fff',stroke:'#185382'});
-        if(schematicWiring){
-            const hit=node('circle',{cx:px,cy:188,r:7,fill:'transparent',style:'cursor:crosshair','data-schematic-terminal':index+'-'+label});
-            hit.addEventListener('click',()=>connect({end,index}));
+        const terminal=node('circle',{cx:px,cy:py,r:active?5:3,fill:active?'#0057ff':degree.get(key)>1?'#182e46':'#fff',stroke:'#185382'});
+        if(schematicTool==='wire'||schematicTool==='junction'){
+            const hit=node('circle',{cx:px,cy:py,r:7,fill:'transparent',style:'cursor:crosshair','data-schematic-terminal':index+'-'+label});
+            hit.addEventListener('click',()=>{
+                if(schematicTool==='junction'&&!wireStart&&!degree.has(key)){
+                    schematicHint.textContent='Избери клема с вече начертана връзка.';
+                    return;
+                }
+                if(schematicTool==='junction'&&!wireStart){
+                    const source=connections.find(link=>link.phase&&(W.key(link.from)===key||W.key(link.to)===key));
+                    if(source)phaseSelect.value=source.phase;
+                }
+                connect({end,index});
+            });
         }
         node('title',{},terminal).textContent=label;
     }
-    if (!connections.length) txt(44,228,'Избери „Връзка“, после щракни върху две клеми.',13);
+    for(const [index,note] of schematicNotes.entries()){
+        const label=node('text',{x:note.x,y:note.y,fill:selectedNote===index?'#0057ff':'#182e46','font-size':14,
+            'data-schematic-note':index,style:'cursor:pointer'});
+        label.textContent=note.text;
+        label.addEventListener('click',()=>{
+            if(schematicTool!=='select')return;
+            selectedNote=index;selectedWire=null;selected=-1;redraw();showSelection();
+        });
+    }
+    svg.onpointermove=event=>{
+        if(view!=='schematic'||!wireStart)return;
+        const start=ends.get(W.key(wireStart));
+        if(!start)return;
+        const terminal=event.target.closest('[data-schematic-terminal]');
+        const end=terminal?{x:Number(terminal.getAttribute('cx')),y:Number(terminal.getAttribute('cy'))}:schematicPoint(event);
+        preview.setAttribute('points',schematicRoute(start,end,schematicBends).map(p=>p.x+','+p.y).join(' '));
+    };
+    const preview=node('polyline',{fill:'none',stroke:W.phases[phaseSelect.value]?.color||'#0057ff',
+        'stroke-width':2,'stroke-dasharray':'5 4','pointer-events':'none'});
+    if(wireStart&&schematicBends.length){
+        const start=ends.get(W.key(wireStart));
+        if(start)preview.setAttribute('points',schematicRoute(start,schematicBends.at(-1),schematicBends.slice(0,-1)).map(p=>p.x+','+p.y).join(' '));
+    }
     $('bom').textContent=items.map(it=>[it.sku,it.name,it.rating].filter(Boolean).join(' · ')).join(' | ');
     $('summary').textContent='Апарати: '+items.length+' · връзки: '+connections.length;
 }
@@ -640,8 +822,12 @@ redraw=function(){
     if (wireStart && !exists(wireStart)) {wireStart=null;wireBends=[];}
     rememberHistory();
     schematicToolbar.hidden=view!=='schematic';
-    schematicSelect.setAttribute('aria-pressed',String(!schematicWiring));
-    schematicConnect.setAttribute('aria-pressed',String(schematicWiring));
+    toolbar.classList.toggle('schematic-active',view==='schematic');
+    if(view!=='schematic')schematicSvg.onpointermove=null;
+    for(const [id,control] of schematicTools)control.setAttribute('aria-pressed',String(schematicTool===id));
+    schematicPhase.value=phaseSelect.value;
+    schematicPhase.hidden=!['wire','junction'].includes(schematicTool);
+    schematicText.hidden=schematicTool!=='text';
     if (view==='schematic') {renderConnectionsSchematic();resizeDrawing();renderWireList();return;}
     boardRender();
     resizeDrawing();
@@ -653,7 +839,7 @@ redraw=function(){
     state.textContent=JSON.stringify(bars);
     window.dispatchEvent(new Event('pdg-cad-change'));
 };
-setView=function(v){stopWire();schematicWiring=false;marking=false;groupButton.setAttribute('aria-pressed','false');view=v;draft=null;editing=false;moving=null;for(const [id,value] of [['frontView','front'],['singleLine','schematic'],['sideView','side'],['threeView','3d']])$(id).classList.toggle('primary',v===value);redraw();status(v==='front'?'Монтажен изглед.':v==='schematic'?'Еднолинейна схема.':'Изглед за преглед.')};
+setView=function(v){stopWire();schematicTool='select';schematicBends=[];selectedNote=-1;schematicHint.textContent=schematicHints.select;marking=false;groupButton.setAttribute('aria-pressed','false');view=v;draft=null;editing=false;moving=null;for(const [id,value] of [['frontView','front'],['singleLine','schematic'],['sideView','side'],['threeView','3d']])$(id).classList.toggle('primary',v===value);redraw();status(v==='front'?'Монтажен изглед.':v==='schematic'?'Еднолинейна схема.':'Изглед за преглед.')};
 showSelection=function(){if(active<0||!bars[active]){oldSelection();return}const b=bars[active],el=$('selection');el.replaceChildren();const title=document.createElement('b');title.textContent='Шина '+(active+1)+' · '+Math.round(C.length(b))+' mm';el.append(title);barPhaseControl(el,'Цвят на избраната шина',b.phase,(phase,select)=>editBarPhase(b,phase,select));for(const [key,label,min,max]of [['width','Ширина (mm)',2,100],['thickness','Дебелина (mm)',1,20]])field(el,label,'number',b[key],v=>{const n=Number(v);if(n>=min&&n<=max){b[key]=n;redraw()}else showSelection()},{min,max});field(el,'Цвят','color',b.color,v=>{b.color=v;redraw()});const sel=document.createElement('select');b.points.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent='Точка '+(i+1);sel.append(o)});vertex=Math.max(0,Math.min(vertex,b.points.length-1));sel.value=vertex;sel.onchange=()=>{vertex=Number(sel.value);showSelection();redraw()};el.append(sel);for(const key of ['x','y','z'])field(el,key.toUpperCase()+' (mm)','number',b.points[vertex][key],v=>{const n=Number(v),max=key==='z'?Math.min(300,cabinet.depthMm):key==='x'?usableW():usableH();if(n>=0&&n<=max){b.points[vertex][key]=n;redraw();showSelection()}else showSelection()},{min:0,max:key==='z'?Math.min(300,cabinet.depthMm):key==='x'?usableW():usableH()});
 field(el,'Диаметър на отвор (mm)','number',b.holes.find(h=>h.index===vertex)?.diameter||8,()=>{}, {id:'holeDiameter',min:2,max:30});button(el,'Добави / промени отвор в точката',()=>{const diameter=Number($('holeDiameter').value);if(diameter<2||diameter>30)return status('Диаметърът трябва да е 2–30 mm.');b.holes=b.holes.filter(h=>h.index!==vertex).concat({index:vertex,diameter});redraw()});button(el,'Добави болтово съединение',()=>{const diameter=Number($('holeDiameter').value);if(diameter>=2&&diameter<=30){b.holes=b.holes.filter(h=>h.index!==vertex).concat({index:vertex,diameter,bolt:true});redraw()}});button(el,'Премахни отвор',()=>{b.holes=b.holes.filter(h=>h.index!==vertex);redraw()});button(el,'Изтрий шина',()=>{bars.splice(active,1);active=-1;redraw();showSelection()});};
 $('drawing').addEventListener('click',e=>{if(suppressClick||editing){suppressClick=false;e.stopImmediatePropagation();e.preventDefault()}},true);
@@ -697,12 +883,12 @@ place=function(r,c){
  try{oldPlace(r,c);}finally{restoring=false;}
  if(items.length>n){Object.assign(items.at(-1),deviceMeta(selectedCatalog));redraw();}
 };
-const previousDemo=$('demo').onclick;$('demo').onclick=()=>{stopWire();connections=[];bars=[];dinRails=[];draft=null;active=-1;mode='din';$('boardMode').value=mode;view='front';previousDemo();setView('front')};
-function data(){return {version:2,project:$('project').value,rows,modules,items,mode,cabinet,busbars:bars,...(dinRails.length?{dinRails}:{}),connections,quote:window.PDGQuote?.settings()}}
+const previousDemo=$('demo').onclick;$('demo').onclick=()=>{stopWire();connections=[];bars=[];dinRails=[];schematicNotes=[];draft=null;active=-1;mode='din';$('boardMode').value=mode;view='front';previousDemo();setView('front')};
+function data(){return {version:2,project:$('project').value,rows,modules,items,mode,cabinet,busbars:bars,...(dinRails.length?{dinRails}:{}),connections,...(schematicNotes.length?{schematicNotes}:{}),quote:window.PDGQuote?.settings()}}
 function download(name,obj){const url=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 $('save').onclick=()=>{try{C.validate(data());download('pdg-electric-cad.json',data())}catch(err){status('Неуспешен запис: '+err.message)}};
 function applyProject(d){
- rows=d.rows;modules=d.modules;items=d.items;bars=d.busbars;dinRails=d.dinRails||[];connections=d.connections||[];
+ rows=d.rows;modules=d.modules;items=d.items;bars=d.busbars;dinRails=d.dinRails||[];connections=d.connections||[];schematicNotes=d.schematicNotes||[];
  mode=d.mode;cabinet=d.cabinet||{...C.defaultCabinet};
  window.PDGQuote?.load(d.quote);
  $('boardMode').value=mode;$('project').value=String(d.project||'Електрическо табло');
@@ -727,7 +913,8 @@ function changeHistory(from,to,message){
  to.push(lastSnapshot);
  lastSnapshot=from.pop();
  restoring=true;
- try{applyProject(JSON.parse(lastSnapshot));}finally{restoring=false;}
+ const currentView=view;
+ try{applyProject(JSON.parse(lastSnapshot));setView(currentView);}finally{restoring=false;}
  lastSnapshot=JSON.stringify(data());
  rememberHistory();status(message);
 }
@@ -776,7 +963,12 @@ document.addEventListener('keydown',e=>{
   e.preventDefault();
   (key==='y'||e.shiftKey?redoButton:undoButton).click();return;
  }
- if(key==='delete'&&!editing&&!wiring&&view==='front'){
+ if(view==='schematic'&&key==='escape'){setSchematicTool('select');return;}
+ if(view==='schematic'&&key==='backspace'&&wireStart){e.preventDefault();schematicBends.pop();redraw();return;}
+ if(view==='schematic'&&key==='delete'&&selectedNote>=0){
+  e.preventDefault();schematicNotes.splice(selectedNote,1);selectedNote=-1;redraw();return;
+ }
+ if(key==='delete'&&!editing&&!wiring&&(view==='front'||(view==='schematic'&&schematicTool==='select'))){
   const chosen=marked.size?marked:(items[selected]?new Set([items[selected]]):null);
   if(selectedWire)connections=connections.filter(w=>w!==selectedWire);
   else if(active>=0&&bars[active])bars.splice(active,1);
@@ -797,7 +989,7 @@ document.addEventListener('keydown',e=>{
  if(e.key==='Escape')cancel();
  if(e.key==='Enter'&&editing===true){e.preventDefault();finish();}
 });
-document.querySelectorAll('[data-type]').forEach(b=>b.addEventListener('click',()=>{stopWire();placing=true;redraw()}));window.PDGCad={arm(value=true){stopWire();placing=value;redraw()},project:data,applyImport(next){applyProject(C.validate(next));status('Предложението от DWG е приложено.');},cabinet:()=>({...cabinet}),chooseCabinet(p){
+document.querySelectorAll('[data-type]').forEach(b=>b.addEventListener('click',()=>{stopWire();if(view==='schematic')setSchematicTool('symbol');placing=true;redraw()}));window.PDGCad={arm(value=true){stopWire();if(view==='schematic'&&value)setSchematicTool('symbol');placing=value;redraw()},project:data,applyImport(next){applyProject(C.validate(next));status('Предложението от DWG е приложено.');},cabinet:()=>({...cabinet}),chooseCabinet(p){
  if(!p)return false;
  const nextCabinet={sku:p.sku,widthMm:p.widthMm,heightMm:p.heightMm,depthMm:p.depthMm};
  const specRows=Number(p.specifications?.['Редове']),specModules=Number(p.specifications?.['Брой модули на ред']);
