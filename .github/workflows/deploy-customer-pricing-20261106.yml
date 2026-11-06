@@ -1,0 +1,124 @@
+name: Publish private catalogue pricing
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-customer-pricing-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d32728dcaecb7d8c477da88dcb0ed20572557740
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: 52e356a3c9f1f40dd1653d3a048bd452a9675be3
+          path: reviewed
+      - name: Verify the reviewed changes
+        working-directory: reviewed
+        run: php -l api/customer-pricing.php
+      - name: Publish and verify CAD files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, json, os, ssl, time, urllib.error, urllib.request, subprocess, tempfile
+          from pathlib import Path
+          paths = [
+              'api/customer-pricing.php','database/.htaccess','catalog-products.js',
+              'api/products.php','api/product-details.php','api/electric-catalog.php',
+              'api/electric-common.php','api/electric-enquiries.php','api/shop-common.php',
+              'api/cart.php','api/checkout.php','api/admin-users.php','admin-dashboard.html',
+              'auth.html','catalog.html','product.js','store.js','electrical-catalog.js','solar-offer.js'
+          ]
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          stage = {p: str(Path(p).with_name('.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + Path(p).name)) for p in paths}
+          originals = {}
+          for p in paths:
+              old_file = Path('previous') / p
+              expected = old_file.read_bytes() if old_file.exists() else None
+              try:
+                  old = read(p)
+              except ftplib.error_perm as error:
+                  if expected is not None or not str(error).startswith('550'):
+                      raise
+                  old = None
+              if p == 'database/.htaccess' and old is not None and payload[p] not in old:
+                  payload[p] = old.rstrip() + b'\n\n' + payload[p]
+              elif p == 'database/.htaccess' and old is not None:
+                  payload[p] = old
+              elif old not in (expected, payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+              originals[p] = old
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(stage[p], p)
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+              root = 'https://pdgsystems.bg/'
+              def public(path):
+                  separator = '&' if '?' in path else '?'
+                  with urllib.request.urlopen(root + path + separator + 'check=' + str(time.time_ns()), timeout=30) as response:
+                      return response.read()
+              products = json.loads(public('api/products.php'))
+              assert not products['prices_visible'] and products['products']
+              assert all(p['price'] is None for p in products['products'])
+              item = json.loads(public('api/product-details.php?id=' + str(products['products'][0]['id'])))
+              assert not item['prices_visible'] and item['product']['price'] is None
+              cad = json.loads(public('api/electric-catalog.php'))
+              assert not cad['prices_visible'] and not cad['busbarRates']
+              assert all(p['unitPrice'] is None for p in cad['products'])
+              for path, codes in [
+                  ('api/cart.php', (401,)),
+                  ('database/import-catalog.sql', (403,404)),
+                  ('database/schrack-shop-catalog.json', (403,404)),
+                  ('database/electrical-reference-prices.json', (403,404)),
+              ]:
+                  try:
+                      public(path)
+                  except urllib.error.HTTPError as error:
+                      assert error.code in codes, (path,error.code)
+                  else:
+                      raise RuntimeError('Unexpected public access: ' + path)
+              assert b'discount_bp' in public('admin-dashboard.html')
+              print('Verified private catalogue pricing and protected static files on the main domain.')
+          except Exception:
+              for p in reversed(changed):
+                  if originals[p] is None:
+                      ftp.delete(p)
+                      continue
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(originals[p]))
+                  ftp.rename(stage[p], p)
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(stage[p])
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
