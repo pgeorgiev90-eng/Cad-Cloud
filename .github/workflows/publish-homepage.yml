@@ -6,6 +6,20 @@ on:
     paths:
       - .github/workflows/publish-homepage.yml
       - index.html
+      - assets/pdg-systems-logo.svg
+      - shop.html
+      - cart.html
+      - product.html
+      - catalog.html
+      - profile-preview.html
+      - solar-cad-preview.html
+      - admin-orders.html
+      - admin-preview.html
+      - admin-products-draft.html
+      - setup-admin-draft.html
+      - maps-designer.html
+      - roof-editor.html
+      - legacy-editor.html
       - assets/shop-solar-components.webp
       - assets/shop-electrical-equipment.webp
       - assets/shop-cables-accessories.webp
@@ -71,7 +85,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('assets/shop-solar-components.webp', 'assets/shop-electrical-equipment.webp', 'assets/shop-cables-accessories.webp', 'shop.html', 'assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'api/cad-page-access.php', 'api/account-draft.php', 'api/registration-draft.php', 'auth.html', 'account-draft.html', 'verify-account.html', 'roof-cad.php', 'electrical-cad.php', 'solar-cad.webmanifest', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
+          paths = ('assets/pdg-systems-logo.svg', 'cart.html', 'product.html', 'catalog.html', 'profile-preview.html', 'solar-cad-preview.html', 'admin-orders.html', 'admin-preview.html', 'admin-products-draft.html', 'setup-admin-draft.html', 'maps-designer.html', 'roof-editor.html', 'legacy-editor.html', 'assets/shop-solar-components.webp', 'assets/shop-electrical-equipment.webp', 'assets/shop-cables-accessories.webp', 'shop.html', 'assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'api/cad-page-access.php', 'api/account-draft.php', 'api/registration-draft.php', 'auth.html', 'account-draft.html', 'verify-account.html', 'roof-cad.php', 'electrical-cad.php', 'solar-cad.webmanifest', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
