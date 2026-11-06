@@ -66,7 +66,7 @@ field(settings,'Ширина на шина (mm)','number',20,()=>{}, {id:'barWid
 field(settings,'Дебелина (mm)','number',5,()=>{}, {id:'barThickness',min:1,max:20});
 field(settings,'Отстояние от плочата (mm)','number',30,()=>{}, {id:'barDepth',min:0,max:300});
 field(settings,'Цвят','color','#e5b82a',()=>{}, {id:'barColor'});
-button(settings,'Чертай тоководеща шина',()=>{stopWire();if(view!=='front')setView('front');editing=true;draft=null;active=-1;selectedCatalog=null;placing=false;status('Щракни за начало, после за огъвки или друга клема. Завърши с бутона или Enter. Escape отказва.');redraw()},'drawBusbar');
+button(settings,'Чертай тоководеща шина',()=>{if(editing===true){finish();return;}stopWire();if(view!=='front')setView('front');editing=true;draft=null;active=-1;selectedCatalog=null;placing=false;status('Щракни за начало, после за огъвки или друга клема. Завърши с бутона или Enter. Escape отказва.');redraw()},'drawBusbar');
 button(settings,'Завърши шина',finish,'finishBusbar');button(settings,'Откажи чертането',cancel,'cancelBusbar');
 button(settings,'Запази избраната шина като модул',()=>{if(!bars[active])return status('Избери шина.');moduleTemplate=JSON.parse(JSON.stringify(bars[active]));try{localStorage.setItem('pdg_busbar_module_v1',JSON.stringify(moduleTemplate));status('Модулът е запазен в този браузър.')}catch{status('Модулът е достъпен до затваряне на страницата.')}},'saveBusbarModule');
 button(settings,'Постави запазен модул',()=>{stopWire();if(!moduleTemplate)return status('Няма запазен модул.');setView('front');placing=false;editing='module';status('Щракни за начало на запазения модул.');},'placeBusbarModule');
@@ -106,7 +106,7 @@ $('boardMode').onchange=()=>{
   mode=next;cancel();
  }catch(err){$('boardMode').value=mode;status(err.message);}
 };
-function finish(){if(draft?.points.length>=2){bars.push(draft);active=bars.length-1;vertex=0;draft=null;editing=false;showSelection();status('Шината е добавена. Избери точка за размери и отвор.')}else status('Необходими са поне две различни точки.');redraw()}
+function finish(){if(draft?.points.length>=2){bars.push(draft);active=bars.length-1;vertex=0;draft=null;editing=false;showSelection();status('Шината е записана. Избери цвят на новата шина, за да начертаеш следващата.')}else status('Необходими са поне две различни точки.');redraw()}
 function cancel(){stopWire();draft=null;editing=false;moving=null;redraw();status('Готов за работа.')}
 function params(){const phase=newBarPhase.value||undefined;const b={id:crypto.randomUUID(),phase,width:Number($('barWidth').value),thickness:Number($('barThickness').value),color:phase?W.phases[phase].color:$('barColor').value,points:[{x:0,y:0,z:Number($('barDepth').value)},{x:5,y:0,z:Number($('barDepth').value)}],holes:[]};C.validate({rows,modules,items:[],busbars:[b]});return b}
 function append(p){try{if(p.x>usableW()||p.y>usableH()||p.z>Math.min(300,cabinet.depthMm))throw Error('Точката е извън монтажната плоча или дълбочината на корпуса.');if(editing==='module'){const b=JSON.parse(JSON.stringify(moduleTemplate)),origin=b.points[0];b.id=crypto.randomUUID();b.points=b.points.map(q=>({x:q.x-origin.x+p.x,y:q.y-origin.y+p.y,z:q.z-origin.z+p.z}));C.validate({rows,modules,items:[],busbars:[b]});if(b.points.some(q=>q.x>usableW()||q.y>usableH()||q.z>cabinet.depthMm))throw Error('Модулът не се побира на тази позиция.');bars.push(b);active=bars.length-1;editing=false;showSelection()}else if(!draft){draft=params();draft.points=[p]}else if(C.length({points:[draft.points.at(-1),p]})>.01)draft.points.push(p);redraw()}catch(err){status(err.message)}}
@@ -172,9 +172,9 @@ button(toolbar,'Добави отклонение',()=>{
     status('Щракни върху хоризонтален проводник в канала, после избери крайна клема.');
     redraw();
 },'addWireBranch');
-function barPhaseControl(parent, value, change){
+function barPhaseControl(parent, title, value, change){
  const label=document.createElement('label');
- label.textContent='Проводник на шината';
+ label.textContent=title;
  const select=document.createElement('select');
  select.setAttribute('aria-label',label.textContent);
  select.append(new Option('Без означение',''));
@@ -184,7 +184,7 @@ function barPhaseControl(parent, value, change){
  label.append(select);parent.append(label);
  return select;
 }
-const newBarPhase=barPhaseControl(settings,'',phase=>{if(phase)$('barColor').value=W.phases[phase].color;});
+const newBarPhase=barPhaseControl(settings,'Цвят на новата шина','',phase=>{if(phase)$('barColor').value=W.phases[phase].color;if(draft)status('Цветът е за следващата шина. Натисни „Завърши шина“, за да запишеш текущата.');});
 function editBarPhase(bar,phase,select){
  const previous=bar.phase;
  bar.phase=phase;
@@ -445,7 +445,7 @@ drawing.addEventListener('pointermove',event=>{
  const group=node('g',{'data-drawing-guide':'','pointer-events':'none','aria-hidden':'true'});
  const project=point=>C.project({...point,z:0},'front');
  const p=project(next);
- const color=bar?(W.phases[newBarPhase.value]?.color||$('barColor').value):(W.phases[phaseSelect.value]?.color||'#087dc2');
+ const color=bar?(draft?.color||W.phases[newBarPhase.value]?.color||$('barColor').value):(W.phases[phaseSelect.value]?.color||'#087dc2');
  const stroke=(points,attrs)=>node('polyline',{points:points.map(project).map(p=>p.x+','+p.y).join(' '),
     fill:'none','stroke-width':3,stroke:color,'stroke-linecap':'round',...attrs},group);
  if(origin){
@@ -578,6 +578,7 @@ function renderConnectionsSchematic() {
     $('summary').textContent='Апарати: '+items.length+' · връзки: '+connections.length;
 }
 redraw=function(){
+    $('drawBusbar').textContent=editing===true?'✓ Завърши шина':'▰ Чертай шина';
     for (const item of marked) if (!items.includes(item)) marked.delete(item);
     topAlign.disabled=leftAlign.disabled=marked.size<2||view!=='front';
     clearGroup.disabled=marked.size===0;
@@ -601,7 +602,7 @@ redraw=function(){
     window.dispatchEvent(new Event('pdg-cad-change'));
 };
 setView=function(v){stopWire();marking=false;groupButton.setAttribute('aria-pressed','false');view=v;draft=null;editing=false;moving=null;for(const [id,value] of [['frontView','front'],['singleLine','schematic'],['sideView','side'],['threeView','3d']])$(id).classList.toggle('primary',v===value);redraw();status(v==='front'?'Монтажен изглед.':'Изглед за преглед. За редакция избери монтажния изглед.')};
-showSelection=function(){if(active<0||!bars[active]){oldSelection();return}const b=bars[active],el=$('selection');el.replaceChildren();const title=document.createElement('b');title.textContent='Шина '+(active+1)+' · '+Math.round(C.length(b))+' mm';el.append(title);barPhaseControl(el,b.phase,(phase,select)=>editBarPhase(b,phase,select));for(const [key,label,min,max]of [['width','Ширина (mm)',2,100],['thickness','Дебелина (mm)',1,20]])field(el,label,'number',b[key],v=>{const n=Number(v);if(n>=min&&n<=max){b[key]=n;redraw()}else showSelection()},{min,max});field(el,'Цвят','color',b.color,v=>{b.color=v;redraw()});const sel=document.createElement('select');b.points.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent='Точка '+(i+1);sel.append(o)});vertex=Math.max(0,Math.min(vertex,b.points.length-1));sel.value=vertex;sel.onchange=()=>{vertex=Number(sel.value);showSelection();redraw()};el.append(sel);for(const key of ['x','y','z'])field(el,key.toUpperCase()+' (mm)','number',b.points[vertex][key],v=>{const n=Number(v),max=key==='z'?Math.min(300,cabinet.depthMm):key==='x'?usableW():usableH();if(n>=0&&n<=max){b.points[vertex][key]=n;redraw();showSelection()}else showSelection()},{min:0,max:key==='z'?Math.min(300,cabinet.depthMm):key==='x'?usableW():usableH()});
+showSelection=function(){if(active<0||!bars[active]){oldSelection();return}const b=bars[active],el=$('selection');el.replaceChildren();const title=document.createElement('b');title.textContent='Шина '+(active+1)+' · '+Math.round(C.length(b))+' mm';el.append(title);barPhaseControl(el,'Цвят на избраната шина',b.phase,(phase,select)=>editBarPhase(b,phase,select));for(const [key,label,min,max]of [['width','Ширина (mm)',2,100],['thickness','Дебелина (mm)',1,20]])field(el,label,'number',b[key],v=>{const n=Number(v);if(n>=min&&n<=max){b[key]=n;redraw()}else showSelection()},{min,max});field(el,'Цвят','color',b.color,v=>{b.color=v;redraw()});const sel=document.createElement('select');b.points.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent='Точка '+(i+1);sel.append(o)});vertex=Math.max(0,Math.min(vertex,b.points.length-1));sel.value=vertex;sel.onchange=()=>{vertex=Number(sel.value);showSelection();redraw()};el.append(sel);for(const key of ['x','y','z'])field(el,key.toUpperCase()+' (mm)','number',b.points[vertex][key],v=>{const n=Number(v),max=key==='z'?Math.min(300,cabinet.depthMm):key==='x'?usableW():usableH();if(n>=0&&n<=max){b.points[vertex][key]=n;redraw();showSelection()}else showSelection()},{min:0,max:key==='z'?Math.min(300,cabinet.depthMm):key==='x'?usableW():usableH()});
 field(el,'Диаметър на отвор (mm)','number',b.holes.find(h=>h.index===vertex)?.diameter||8,()=>{}, {id:'holeDiameter',min:2,max:30});button(el,'Добави / промени отвор в точката',()=>{const diameter=Number($('holeDiameter').value);if(diameter<2||diameter>30)return status('Диаметърът трябва да е 2–30 mm.');b.holes=b.holes.filter(h=>h.index!==vertex).concat({index:vertex,diameter});redraw()});button(el,'Добави болтово съединение',()=>{const diameter=Number($('holeDiameter').value);if(diameter>=2&&diameter<=30){b.holes=b.holes.filter(h=>h.index!==vertex).concat({index:vertex,diameter,bolt:true});redraw()}});button(el,'Премахни отвор',()=>{b.holes=b.holes.filter(h=>h.index!==vertex);redraw()});button(el,'Изтрий шина',()=>{bars.splice(active,1);active=-1;redraw();showSelection()});};
 $('drawing').addEventListener('click',e=>{if(suppressClick||editing){suppressClick=false;e.stopImmediatePropagation();e.preventDefault()}},true);
 $('drawing').addEventListener('pointerdown',event=>{
@@ -742,7 +743,7 @@ document.addEventListener('keydown',e=>{
   redraw();return;
  }
  if(e.key==='Escape')cancel();
- if(e.key==='Enter'&&editing)finish();
+ if(e.key==='Enter'&&editing===true){e.preventDefault();finish();}
 });
 document.querySelectorAll('[data-type]').forEach(b=>b.addEventListener('click',()=>{stopWire();placing=true;redraw()}));window.PDGCad={arm(value=true){stopWire();placing=value;redraw()},project:data,applyImport(next){applyProject(C.validate(next));status('Предложението от DWG е приложено.');},cabinet:()=>({...cabinet}),chooseCabinet(p){
  if(!p)return false;
