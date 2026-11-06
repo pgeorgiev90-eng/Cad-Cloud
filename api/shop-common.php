@@ -43,6 +43,12 @@ function shop_cents($price): ?int {
     return $cents>0 ? $cents : null;
 }
 function shop_customer_cart(): void {
+    $id=(int)$_SESSION['user']['id'];
+    if (($_SESSION['cart_account_id']??null)!==$id) {
+        unset($_SESSION['cart'],$_SESSION['checkout_key'],$_SESSION['last_order'],
+            $_SESSION['electric_request_key'],$_SESSION['electric_submitted'],$_SESSION['electric_last_request']);
+        $_SESSION['cart_account_id']=$id;
+    }
     $_SESSION['cart']??=[];
     $_SESSION['csrf']??=bin2hex(random_bytes(32));
     $_SESSION['checkout_key']??=bin2hex(random_bytes(32));
