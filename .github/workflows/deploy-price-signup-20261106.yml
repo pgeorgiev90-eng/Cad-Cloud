@@ -1,0 +1,104 @@
+name: Publish signup prompt for prices
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-price-signup-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 52e356a3c9f1f40dd1653d3a048bd452a9675be3
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: 55ee5355b22fff76d522244b37f594dfa9b7740e
+          path: reviewed
+      - name: Verify the reviewed changes
+        working-directory: reviewed
+        run: node --check product.js
+      - name: Publish and verify CAD files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, os, ssl, subprocess, tempfile
+          from pathlib import Path
+          paths = ['product.js','auth.html','product.html','catalog.html']
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          stage = {p: '.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + p for p in paths}
+          originals = {}
+          for p in paths:
+              old_file = Path('previous') / p
+              expected = old_file.read_bytes() if old_file.exists() else None
+              try:
+                  old = read(p)
+              except ftplib.error_perm as error:
+                  if expected is not None or not str(error).startswith('550'):
+                      raise
+                  old = None
+              if old not in (expected, payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+              originals[p] = old
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(stage[p], p)
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  if originals[p] is None:
+                      ftp.delete(p)
+                      continue
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(originals[p]))
+                  ftp.rename(stage[p], p)
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(stage[p])
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify public pricing prompts
+        shell: python
+        run: |
+          import json, time, urllib.request
+          from pathlib import Path
+          root = 'https://pdgsystems.bg/'
+          def get(path):
+              sep = '&' if '?' in path else '?'
+              with urllib.request.urlopen(root + path + sep + 'verify=' + str(time.time_ns()), timeout=30) as r:
+                  return r.read()
+          for page in ('auth.html','catalog.html','product.html','product.js'):
+              assert get(page) == (Path('reviewed') / page).read_bytes(), page
+              print('Verified', page)
+          products = json.loads(get('api/products.php'))
+          assert not products['prices_visible'] and all(p['price'] is None for p in products['products'])
+          session = json.loads(get('api/account-draft.php?action=session'))
+          print('Public registration available:', session.get('registration_available'))
