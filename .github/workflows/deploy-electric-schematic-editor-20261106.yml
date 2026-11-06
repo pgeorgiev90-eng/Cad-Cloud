@@ -1,0 +1,129 @@
+name: Publish Electric CAD schematic editor
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-electric-schematic-editor-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a4b11185bf469a86e7aa6b37f47932f7745afb32
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: fa3a6c27e26a6ea829077a782bf192d6d1125e37
+          path: reviewed
+      - name: Verify the reviewed changes
+        working-directory: reviewed
+        run: |
+          set -e
+          php -l electrical-cad.php
+          php -l roof-cad.php
+          for file in electrical-busbar.js electrical-schematic-symbols.js electrical-cad-design.js solar-offer.js; do node --check "$file"; done
+          for file in tests/*.js tests/*.cjs; do node "$file"; done
+      - name: Publish and verify CAD files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, os, ssl, subprocess, tempfile
+          from pathlib import Path
+          paths = ['electrical-busbar-core.js', 'electrical-busbar.js',
+                   'electrical-catalog.js', 'electrical-cad-design.css', 'electrical-cad.php']
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          stage = {p: '.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + p for p in paths}
+          originals = {}
+          for p in paths:
+              old_file = Path('previous') / p
+              expected = old_file.read_bytes() if old_file.exists() else None
+              try:
+                  old = read(p)
+              except ftplib.error_perm as error:
+                  if expected is not None or not str(error).startswith('550'):
+                      raise
+                  old = None
+              if p.endswith('.php') and old != payload[p]:
+                  updates = {
+                      'electrical-cad.php': [
+                          (b'electrical-cad-design.css?v=brand1', b'electrical-cad-design.css?v=schematic2'),
+                          (b'electrical-busbar-core.js?v=channel1', b'electrical-busbar-core.js?v=schematic2'),
+                          (b'electrical-busbar.js?v=schematic1', b'electrical-busbar.js?v=schematic2'),
+                          (b'electrical-catalog.js?v=wire-dwg1', b'electrical-catalog.js?v=schematic2'),
+                      ],
+                  }
+                  candidate = old
+                  for before, after in updates[p]:
+                      if candidate.count(after) == 1 and candidate.count(before) == 0:
+                          continue
+                      if candidate.count(before) != 1 or after in candidate:
+                          raise RuntimeError(f'Unexpected deployed reference in {p}: {before!r}')
+                      candidate = candidate.replace(before, after)
+                  with tempfile.NamedTemporaryFile(suffix='.php') as temp:
+                      temp.write(candidate)
+                      temp.flush()
+                      subprocess.run(['php', '-l', temp.name], check=True)
+                  payload[p] = candidate
+              elif old not in (expected, payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+              originals[p] = old
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(stage[p], p)
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  if originals[p] is None:
+                      ftp.delete(p)
+                      continue
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(originals[p]))
+                  ftp.rename(stage[p], p)
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(stage[p])
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify public schematic editor assets
+        shell: python
+        run: |
+          import json, time, urllib.request
+          from pathlib import Path
+          def get(path):
+              sep = '&' if '?' in path else '?'
+              with urllib.request.urlopen('https://pdgsystems.bg/' + path + sep + 'release=' + str(time.time_ns()), timeout=30) as r:
+                  return r.read()
+          for name in ('electrical-busbar.js','electrical-busbar-core.js','electrical-catalog.js','electrical-cad-design.css'):
+              assert get(name + '?v=schematic2') == (Path('reviewed') / name).read_bytes(), name
+          assert 'Вход | PDG Systems' in get('electrical-cad.php').decode('utf-8')
+          catalog = json.loads(get('api/electric-catalog.php'))['products']
+          assert any(p['sku'] == 'MC216233S-' for p in catalog)
+          print('Verified live schematic assets, login and Schrack catalog.')
