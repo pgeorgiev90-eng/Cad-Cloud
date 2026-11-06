@@ -1,0 +1,40 @@
+name: Check inbox and site statistics
+on:
+  push:
+    paths:
+      - .github/workflows/check-inbox-metrics.yml
+      - tests/inbox_metrics.py
+      - api/enquiry-inbox.php
+      - api/site-metrics*.php
+      - api/admin-site-metrics.php
+      - api/contact-enquiries.php
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: pdg_test
+          MYSQL_ROOT_PASSWORD: test-root-password
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptest-root-password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test with isolated accounts, database and mail capture
+        run: |
+          php tests/bootstrap-account-ci.php
+          php -r '$db=new PDO("mysql:host=127.0.0.1;dbname=pdg_test","root","test-root-password");$db->exec(file_get_contents("database/electric-cad-schema.sql"));'
+          php -d auto_prepend_file=/tmp/pdg-test-https.php -d "sendmail_path=/bin/sh $GITHUB_WORKSPACE/tests/capture-mail-ci.sh" -S 127.0.0.1:8199 -t . > /tmp/pdg-inbox-server.log 2>&1 &
+          trap 'cat /tmp/pdg-inbox-server.log' EXIT
+          for i in $(seq 1 15); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8199/api/account-draft.php?action=session; then break; fi
+            sleep 1
+          done
+          python3 tests/inbox_metrics.py

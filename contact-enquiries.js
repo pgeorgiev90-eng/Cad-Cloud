@@ -32,6 +32,7 @@
             }
             ticket = null;
             form.reset();
+            if (response.status === 201) window.PDGTrack?.('enquiry');
             status.textContent = 'Запитването е получено. Номер: ' + result.reference;
         } catch {
             status.textContent = 'Не успяхме да потвърдим изпращането. Опитайте отново.';

@@ -1,0 +1,8 @@
+.pdg-cookie-settings,.pdg-cookie-panel{color:#0b173a;background:#fff;border:1px solid #cbd8ea;border-radius:10px;font:14px/1.5 system-ui,sans-serif}
+.pdg-cookie-settings{position:fixed;left:16px;bottom:16px;z-index:999;padding:7px 12px;cursor:pointer}
+.pdg-cookie-panel{position:fixed;z-index:1000;left:16px;bottom:62px;width:min(460px,calc(100vw - 32px));padding:16px;box-shadow:0 8px 30px #10224426}
+.pdg-cookie-panel[hidden]{display:none}
+.pdg-cookie-panel p{margin:6px 0 12px}
+.pdg-cookie-panel div{display:flex;gap:8px;flex-wrap:wrap}
+.pdg-cookie-panel button{padding:8px 11px;border:1px solid #1046ef;border-radius:7px;background:white;color:#1046ef;font:inherit;cursor:pointer}
+.pdg-cookie-panel button[data-choice=yes]{background:#1046ef;color:white}

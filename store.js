@@ -23,7 +23,7 @@
   }
   function cartLink() {const a=node('a',undefined,'cart-link');a.href='cart.html';a.append(node('span','Количка '));const count=node('span','…');count.dataset.cartCount='';a.append(count);return a;}
   document.querySelectorAll('[data-store-cart-link]').forEach(e=>e.append(cartLink()));
-  window.PDGStore={add:async(id,quantity=1)=>{try{await mutate({action:'add',id:Number(id),quantity});tell('Продуктът е добавен в количката.');}catch(e){tell(errors[e.message]||'Неуспешно добавяне. Опитайте отново.');throw e;}},money};
+  window.PDGStore={add:async(id,quantity=1)=>{try{await mutate({action:'add',id:Number(id),quantity});window.PDGTrack?.('cart_add');tell('Продуктът е добавен в количката.');}catch(e){tell(errors[e.message]||'Неуспешно добавяне. Опитайте отново.');throw e;}},money};
   const root=document.getElementById('cart-content'),form=document.getElementById('checkout-form'),status=document.getElementById('cart-status');
   const summary=document.getElementById('cart-summary');
   let submitting=false;

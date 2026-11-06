@@ -66,38 +66,105 @@
             back.disabled = page <= 1;
         }
     }
+    const inboxApi = 'api/enquiry-inbox.php';
+    let selected = '';
+    function unreadCount(count) {
+        element('pdg-inbox-count').textContent = '(' + count + ' непрочетени)';
+        element('pdg-inbox-nav-count').textContent = count ? '(' + count + ')' : '';
+    }
     async function enquiries() {
-        detail.textContent = 'Зареждане на запитванията…';
+        const refresh = element('pdg-inbox-refresh');
+        refresh.disabled = true;
+        if (!selected) detail.textContent = 'Зареждане на запитванията…';
         try {
-            const data = await request('view=enquiries');
-            if (!data.enquiries.length) {
-                detail.textContent = 'Още няма запитвания.';
-                return;
+            const response = await fetch(inboxApi, {cache:'no-store'});
+            if (!response.ok) throw Error('unavailable');
+            const data = await response.json();
+            unreadCount(data.unread);
+            inbox.replaceChildren();
+            detail.textContent = data.enquiries.length ? 'Изберете запитване, за да го прочетете.' : 'Още няма запитвания.';
+            function show(enquiry) {
+                detail.replaceChildren(
+                    make('h3', enquiry.project_name),
+                    make('p', [enquiry.customer_name,enquiry.email,enquiry.phone].filter(Boolean).join(' · ')),
+                    make('p', enquiry.created_at + ' · № ' + enquiry.public_ref)
+                );
+                if (enquiry.message) detail.append(make('p', enquiry.message));
+                if (enquiry.source === 'electric') {
+                    const link = make('a', 'Отвори материалите и цените');
+                    link.href = 'admin-electric.html';
+                    detail.append(link);
+                }
             }
             for (const enquiry of data.enquiries) {
-                const label = enquiry.source === 'site' ? 'Сайт' : 'Electric CAD';
-                const button = make('button', label + ' · ' + enquiry.customer_name);
+                const label = (enquiry.source === 'site' ? 'Сайт' : 'Electric CAD') + ' · ' + enquiry.customer_name;
+                const button = make('button', enquiry.unread ? 'Непрочетено · ' + label : label);
                 button.type = 'button';
-                button.setAttribute('aria-pressed','false');
-                button.addEventListener('click', () => {
+                button.dataset.unread = String(enquiry.unread);
+                button.setAttribute('aria-pressed', String(selected === enquiry.public_ref));
+                if (selected === enquiry.public_ref) show(enquiry);
+                button.addEventListener('click', async () => {
+                    selected = enquiry.public_ref;
                     for (const item of inbox.children) item.setAttribute('aria-pressed',String(item === button));
-                    detail.replaceChildren(
-                        make('h3',enquiry.project_name),
-                        make('p',[enquiry.customer_name,enquiry.email,enquiry.phone].filter(Boolean).join(' · ')),
-                        make('p',enquiry.created_at + ' · № ' + enquiry.public_ref)
-                    );
-                    if (enquiry.message) detail.append(make('p',enquiry.message));
-                    if (enquiry.source === 'electric') {
-                        const link = make('a','Отвори материалите и цените');
-                        link.href = 'admin-electric.html';
-                        detail.append(link);
+                    show(enquiry);
+                    if (!enquiry.unread) return;
+                    for (const item of inbox.children) item.disabled = true;
+                    refresh.disabled = true;
+                    try {
+                        const read = await fetch(inboxApi, {
+                            method:'POST',
+                            headers:{'Content-Type':'application/json','X-CSRF-Token':data.csrf},
+                            body:JSON.stringify({reference:enquiry.public_ref})
+                        });
+                        if (!read.ok) throw Error('unavailable');
+                        unreadCount((await read.json()).unread);
+                        enquiry.unread = false;
+                        button.dataset.unread = 'false';
+                        button.textContent = label;
+                    } catch {
+                        if (selected === enquiry.public_ref) detail.append(make('p', 'Запитването остава непрочетено. Опитайте отново.'));
+                    } finally {
+                        for (const item of inbox.children) item.disabled = false;
+                        refresh.disabled = false;
+                        button.focus();
                     }
                 });
                 inbox.append(button);
             }
-            inbox.firstElementChild.click();
         } catch {
             detail.textContent = 'Запитванията не могат да се заредят.';
+        } finally {
+            refresh.disabled = false;
+        }
+    }
+    const metricsLabels = {
+        visit:'Посещения',phone:'Кликове върху телефона',enquiry:'Изпратени запитвания',
+        solar_cad:'Отваряния на Solar CAD',electric_cad:'Отваряния на Electric CAD',
+        registration:'Потвърдени регистрации',category:'Прегледи на категории',
+        product:'Прегледи на продукти',cart_add:'Добавяния в количката'
+    };
+    async function siteMetrics() {
+        const target = element('pdg-metrics-status');
+        try {
+            const response = await fetch('api/admin-site-metrics.php', {cache:'no-store'});
+            if (!response.ok) throw Error('unavailable');
+            const data = await response.json();
+            element('pdg-metrics-events').replaceChildren(...Object.entries(metricsLabels).map(([event,label]) => {
+                const row = make('tr');
+                const heading = make('th',label);
+                heading.scope = 'row';
+                const counts = ['google','facebook','direct','other'].map(source =>
+                    Number(data.events.find(metric => metric.event_name === event && metric.source === source)?.total || 0));
+                row.append(heading, ...[counts.reduce((sum,value) => sum+value,0),...counts].map(value => make('td',value)));
+                return row;
+            }));
+            const sections = window.PDGCatalogSections.sections;
+            element('pdg-metrics-categories').replaceChildren(...data.categories.map(row =>
+                make('li', (sections[row.item] || ({all:'Всички категории',solar:'Соларни категории'})[row.item] || row.item) + ' · ' + row.total)));
+            element('pdg-metrics-products').replaceChildren(...data.products.map(row => make('li', row.name + ' · ' + row.total)));
+            target.textContent = data.events.length ? '' : 'Още няма отчетени действия.';
+        } catch {
+            target.textContent = 'Статистиката за сайта временно не е достъпна.';
         }
     }
     form.addEventListener('submit',event => {
@@ -107,7 +174,17 @@
     });
     back.addEventListener('click',() => {page--;projects();});
     next.addEventListener('click',() => {page++;projects();});
-    function start() {projects();enquiries();}
+    function start() {
+        projects();
+        enquiries();
+        siteMetrics();
+        element('pdg-inbox-refresh').addEventListener('click', enquiries);
+        setInterval(() => {
+            if (document.hidden) return;
+            if (!element('pdg-inbox-refresh').disabled && !inbox.contains(document.activeElement)) enquiries();
+            siteMetrics();
+        }, 30000);
+    }
     if (element('app').hidden) window.addEventListener('pdg-admin-ready',start,{once:true});
     else start();
 })();
