@@ -36,7 +36,7 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         shell: python
         run: |
-          import ftplib, io, os, ssl
+          import ftplib, io, os, ssl, subprocess, tempfile
           from pathlib import Path
           paths = ['electrical-schematic-symbols.js', 'electrical-busbar.js', 'electrical-cad-design.js',
                    'electrical-cad-design.css', 'solar-offer.js', 'electrical-cad.php', 'roof-cad.php']
@@ -61,7 +61,29 @@ jobs:
                   if expected is not None or not str(error).startswith('550'):
                       raise
                   old = None
-              if old not in (expected, payload[p]):
+              if p.endswith('.php') and old != payload[p]:
+                  updates = {
+                      'electrical-cad.php': [
+                          (b'electrical-cad-design.css?v=phase2', b'electrical-cad-design.css?v=brand1'),
+                          (b'electrical-cad-design.js?v=20261105b', b'electrical-cad-design.js?v=brand1'),
+                          (b'<script src="electrical-busbar.js?v=barflow1">',
+                           b'<script src="electrical-schematic-symbols.js?v=1"></script><script src="electrical-busbar.js?v=schematic1">'),
+                      ],
+                      'roof-cad.php': [(b'solar-offer.js?v=4', b'solar-offer.js?v=5')],
+                  }
+                  candidate = old
+                  for before, after in updates[p]:
+                      if candidate.count(after) == 1 and candidate.count(before) == 0:
+                          continue
+                      if candidate.count(before) != 1 or after in candidate:
+                          raise RuntimeError(f'Unexpected deployed reference in {p}: {before!r}')
+                      candidate = candidate.replace(before, after)
+                  with tempfile.NamedTemporaryFile(suffix='.php') as temp:
+                      temp.write(candidate)
+                      temp.flush()
+                      subprocess.run(['php', '-l', temp.name], check=True)
+                  payload[p] = candidate
+              elif old not in (expected, payload[p]):
                   raise RuntimeError('Unexpected hosting version: ' + p)
               originals[p] = old
           changed = []
