@@ -24,28 +24,3 @@ header .cad-brand img{display:block;width:clamp(128px,17vw,190px);height:auto;ma
 .schematic-toolbar select,.schematic-toolbar input{width:auto;min-width:130px}
 .schematic-toolbar [hidden]{display:none}
 .schematic-toolbar [role="status"]{flex:1 0 100%;font-size:12px;color:#344b66}
-
-#pdg-help #pdg-launch {
-  display:grid;
-  place-items:center;
-  width:44px;
-  height:44px;
-  margin-left:auto;
-  padding:0;
-  background:transparent;
-  box-shadow:none;
-  font-size:0;
-}
-#pdg-help #pdg-launch::after {
-  content:"?" / "";
-  display:grid;
-  place-items:center;
-  width:30px;
-  height:30px;
-  border-radius:50%;
-  background:#227554;
-  color:#fff;
-  font:600 17px/1 system-ui,sans-serif;
-}
-#pdg-help #pdg-launch:hover::after {background:#195c42}
-#pdg-help #pdg-launch:focus-visible {outline:2px solid #227554;outline-offset:1px}
