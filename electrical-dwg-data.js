@@ -11,8 +11,30 @@ function wireLayer(layer) {
     if(/^(?:WIRES?|WIRING|ПРОВОДНИК)$/u.test(name))return '';
     return /^(?:(?:WIRES?|WIRING|ПРОВОДНИК)[ _-])?(L1|L2|L3|N|PE)$/u.exec(name)?.[1];
 }
+function crossingReviews(segments) {
+    const warnings=[],seen=new Set(),epsilon=1e-8;
+    segments.sort((a,b)=>a.left-b.left);
+    for(let i=0;i<segments.length&&warnings.length<60;i++){
+        const a=segments[i],dx=a.end.x-a.start.x,dy=a.end.y-a.start.y;
+        for(let j=i+1;j<segments.length&&segments[j].left<=a.right&&warnings.length<60;j++){
+            const b=segments[j],ex=b.end.x-b.start.x,ey=b.end.y-b.start.y;
+            if(a.top>b.bottom||b.top>a.bottom)continue;
+            const det=dx*ey-dy*ex;
+            if(!det)continue;
+            const x=b.start.x-a.start.x,y=b.start.y-a.start.y;
+            const t=(x*ey-y*ex)/det,u=(x*dy-y*dx)/det;
+            if(t<-epsilon||t>1+epsilon||u<-epsilon||u>1+epsilon||
+                !(t>epsilon&&t<1-epsilon||u>epsilon&&u<1-epsilon))continue;
+            const point={x:a.start.x+t*dx,y:a.start.y+t*dy},key=pointKey(point);
+            if(seen.has(key))continue;
+            seen.add(key);
+            warnings.push({phase:a.phase===b.phase?a.phase:'',point,reason:'Пресичане без общ край'});
+        }
+    }
+    return warnings;
+}
 function traceWires(entities, terminals) {
-    const layers=new Map(), proposals=[], review=[];
+    const layers=new Map(), proposals=[], review=[], segments=[];
     let skipped=0, segmentCount=0;
     for(const e of entities){
         const phase=wireLayer(e.layer);
@@ -28,8 +50,10 @@ function traceWires(entities, terminals) {
         const graph=layers.get(phase)||new Map();
         layers.set(phase,graph);
         for(let i=1;i<points.length;i++){
-            const a=pointKey(points[i-1]),b=pointKey(points[i]);
+            const start=points[i-1],end=points[i],a=pointKey(start),b=pointKey(end);
             if(a===b)continue;
+            segments.push({start,end,phase,left:Math.min(start.x,end.x),right:Math.max(start.x,end.x),
+                top:Math.min(start.y,end.y),bottom:Math.max(start.y,end.y)});
             if(!graph.has(a))graph.set(a,new Set());
             if(!graph.has(b))graph.set(b,new Set());
             graph.get(a).add(b);graph.get(b).add(a);
@@ -61,7 +85,7 @@ function traceWires(entities, terminals) {
             }else if(review.length<250)review.push({phase,reason:branches?'Разклонение или двусмислена клема':'Трасето няма две еднозначни крайни клеми'});
         }
     }
-    return {proposals,review,skipped};
+    return {proposals,review:[...crossingReviews(segments),...review],skipped};
 }
 export function equipmentFromDwg(database) {
     const rows = new Map();

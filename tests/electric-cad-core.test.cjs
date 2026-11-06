@@ -138,14 +138,15 @@ test('DWG traces only a supported phase path between two explicit terminals', as
     mark('QF1_BOTTOM_1',0,0),mark('QF2_TOP_1',10,10),mark('QF3_TOP_1',9,9),mark('QF4_BOTTOM_1',1,1),
     {type:'LWPOLYLINE',layer:'L1',flag:0,elevation:0,extrusionDirection:{x:0,y:0,z:0},
       vertices:[{x:0,y:0},{x:0,y:10},{x:10,y:10}]},
-    line('WIRE',1,1,9,9),line('L2',0,0,2,2)
+    line('WIRE',1,1,9,9),line('L2',0,0,2,2),line('PE',0,5,10,5)
   ]});
   assert.equal(result.blocks,0);
   assert.deepEqual(result.proposals,[
     {from:{ref:'QF1',side:'bottom',pole:0},to:{ref:'QF2',side:'top',pole:0},phase:'L1'},
     {from:{ref:'QF4',side:'bottom',pole:0},to:{ref:'QF3',side:'top',pole:0},phase:''}
   ]);
-  assert.equal(result.review.length,1);
+  assert.equal(result.review.filter(r=>!r.point).length,2);
+  assert.deepEqual(result.review.find(r=>r.point)?.point,{x:0,y:5});
   assert.equal(result.skipped,0);
 });
 

@@ -136,7 +136,10 @@ function showImport(data){
         }
         choices.push({wire,check,conductor});
     }
-    for(const entry of data.review)textElement('li',(entry.phase||'Без означение')+' · за проверка: '+entry.reason,wireList);
+    for(const entry of data.review){
+        const coordinates=entry.point?' · X '+entry.point.x.toFixed(2)+' / Y '+entry.point.y.toFixed(2)+' в DWG':'';
+        textElement('li',(entry.phase||'Трасе')+' · за проверка: '+entry.reason+coordinates,wireList);
+    }
     if(data.skipped)textElement('p','Линии за ръчна проверка: '+data.skipped+' · неподдържана геометрия или лимит.',result);
     textElement('p','Пресичане без общ край не създава връзка. Провери проводниците преди прилагане.',result);
     action('Преглед на подредбата',result,()=>{
