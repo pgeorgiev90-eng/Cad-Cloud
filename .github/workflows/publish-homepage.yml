@@ -6,6 +6,7 @@ on:
     paths:
       - index.html
       - assets/solar-cad-homepage.webp
+      - assets/electric-cad-homepage.webp
 
 permissions:
   contents: read
@@ -20,7 +21,7 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Publish homepage and Solar CAD image over FTPS
+      - name: Publish homepage and CAD images over FTPS
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER }}
@@ -31,7 +32,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('assets/solar-cad-homepage.webp', 'index.html')
+          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
