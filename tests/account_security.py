@@ -16,6 +16,16 @@ def request(opener,path,data=None,csrf=None):
     except urllib.error.HTTPError as e: return e.code,json.load(e)
 def check(condition,message):
     if not condition: raise AssertionError(message)
+def check_editor_access(opener, authenticated):
+    for editor in ['roof-cad.php', 'electrical-cad.php']:
+        with opener.open(BASE+editor, timeout=10) as response:
+            if authenticated:
+                check(response.geturl()==BASE+editor, 'authenticated CAD editor access')
+                check(b'id="save-account-project"' in response.read(), 'CAD editor was rendered')
+            else:
+                check(response.geturl()==BASE+'auth.html?next='+editor, 'guest CAD redirects to login')
+
+check_editor_access(client(), False)
 admin=client()
 status,body=request(admin,'api/account-draft.php?action=session')
 check(status==200 and body['user'] is None,'new session')
@@ -79,10 +89,11 @@ match=re.search(r'#token=([a-f0-9]{64})',message)
 check(bool(match),'confirmation email must contain token')
 status,_=request(visitor,'api/registration-draft.php?action=verify',{'token':'a'*64},visitor_csrf)
 check(status==400,'incorrect verification token must fail')
-status,body=request(visitor,'api/registration-draft.php?action=verify',{'token':match.group(1)},visitor_csrf)
+status,body=request(visitor,'api/registration-draft.php?action=verify',{'token':match.group(1),'password':registration['password']},visitor_csrf)
 check(status==200 and body['ok'],'email confirmation')
-status,_=request(visitor,'api/registration-draft.php?action=verify',{'token':match.group(1)},visitor_csrf)
+status,_=request(visitor,'api/registration-draft.php?action=verify',{'token':match.group(1),'password':registration['password']},visitor_csrf)
 check(status==400,'verification token must be one-time')
 status,body=request(visitor,'api/account-draft.php?action=login',registration,visitor_csrf)
 check(status==200 and body['user']['role']=='customer','verified customer login')
+check_editor_access(visitor, True)
 print('Login, admin authorization, setup and email verification checks passed.')

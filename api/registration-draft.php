@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-// Draft. Registration is disabled until explicit server configuration and mail verification.
+// New CAD accounts require email verification.
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -19,36 +19,50 @@ try {
   $path=dirname(__DIR__,2).'/pdg-shop-db.php';
   if (!is_file($path)) throw new RuntimeException('config');
   $s=require $path;
-  if (!is_array($s) || ($s['registration_enabled']??false)!==true) response(503,['error'=>'registration_unavailable']);
+  if (!is_array($s) || ($s['cad_registration_enabled']??true)!==true) response(503,['error'=>'registration_unavailable']);
   $db=new PDO('mysql:host='.($s['host']??'localhost').';dbname='.($s['database']??'').';charset=utf8mb4',$s['username']??'',$s['password']??'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
-  if ($action==='verify') {
-    $token=is_string($data['token']??null)?$data['token']:'';
-    if (!preg_match('/^[a-f0-9]{64}$/D',$token)) response(400,['error'=>'invalid_token']);
-    $db->beginTransaction();
-    $q=$db->prepare("SELECT t.user_id FROM pdg_email_tokens t JOIN pdg_users u ON u.id=t.user_id WHERE t.token_hash=? AND t.expires_at>NOW() AND u.role='customer' AND u.is_active=0 FOR UPDATE");
-    $q->execute([hash('sha256',$token)]);$row=$q->fetch();
-    if (!$row){$db->rollBack();response(400,['error'=>'invalid_token']);}
-    $q=$db->prepare("UPDATE pdg_users SET is_active=1 WHERE id=? AND role='customer'");$q->execute([$row['user_id']]);
-    $q=$db->prepare('DELETE FROM pdg_email_tokens WHERE user_id=?');$q->execute([$row['user_id']]);$db->commit();
-    response(200,['ok'=>true]);
-  }
-  if ($action!=='register') response(404,['error'=>'not_found']);
-  $email=is_string($data['email']??null)?trim($data['email']):'';
-  $password=is_string($data['password']??null)?$data['password']:'';
-  if (strlen($email)>254||!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($password)<12||strlen($password)>72) response(422,['error'=>'invalid_details']);
-  $key=hash('sha256','registration:'.($_SERVER['REMOTE_ADDR']??'unknown'));
+  if (!in_array($action,['register','verify'],true)) response(404,['error'=>'not_found']);
+  $key=hash('sha256','registration:'.$action.':'.($_SERVER['REMOTE_ADDR']??'unknown'));
   $db->beginTransaction();
   $q=$db->prepare("INSERT INTO pdg_login_attempts(identifier_hash,window_start,attempt_count) VALUES (?,NOW(),0) ON DUPLICATE KEY UPDATE identifier_hash=VALUES(identifier_hash)");$q->execute([$key]);
   $q=$db->prepare("SELECT attempt_count,(window_start<DATE_SUB(NOW(),INTERVAL 15 MINUTE)) AS expired FROM pdg_login_attempts WHERE identifier_hash=? FOR UPDATE");$q->execute([$key]);$a=$q->fetch();
   if ((int)$a['expired']===1){$q=$db->prepare("UPDATE pdg_login_attempts SET window_start=NOW(),attempt_count=0 WHERE identifier_hash=?");$q->execute([$key]);$a['attempt_count']=0;}
   if ((int)$a['attempt_count']>=5){$db->commit();response(429,['error'=>'try_later']);}
   $q=$db->prepare('UPDATE pdg_login_attempts SET attempt_count=attempt_count+1 WHERE identifier_hash=?');$q->execute([$key]);$db->commit();
+  if ($action==='verify') {
+    $token=is_string($data['token']??null)?$data['token']:'';
+    $password=is_string($data['password']??null)?$data['password']:'';
+    if (strlen($password)<12 || strlen($password)>72 || !preg_match('/^[a-f0-9]{64}$/D',$token)) response(400,['error'=>'invalid_token']);
+    $db->beginTransaction();
+    $q=$db->prepare("SELECT t.user_id,u.password_hash FROM pdg_email_tokens t JOIN pdg_users u ON u.id=t.user_id WHERE t.token_hash=? AND t.expires_at>NOW() AND u.role='customer' AND u.is_active=0 FOR UPDATE");
+    $q->execute([hash('sha256',$token)]);$row=$q->fetch();
+    if (!$row || !password_verify($password,$row['password_hash'])){$db->rollBack();response(400,['error'=>'invalid_token']);}
+    $q=$db->prepare("UPDATE pdg_users SET is_active=1 WHERE id=? AND role='customer'");$q->execute([$row['user_id']]);
+    $q=$db->prepare('DELETE FROM pdg_email_tokens WHERE user_id=?');$q->execute([$row['user_id']]);$db->commit();
+    response(200,['ok'=>true]);
+  }
+  $email=is_string($data['email']??null)?trim($data['email']):'';
+  $password=is_string($data['password']??null)?$data['password']:'';
+  if (strlen($email)>254||!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($password)<12||strlen($password)>72) response(422,['error'=>'invalid_details']);
   $db->beginTransaction();
   $q=$db->prepare('SELECT id,is_active,role FROM pdg_users WHERE email=? FOR UPDATE');$q->execute([$email]);$user=$q->fetch();
-  if (!$user){$q=$db->prepare("INSERT INTO pdg_users(email,password_hash,role,is_active) VALUES (?,?,'customer',0)");$q->execute([$email,password_hash($password,PASSWORD_DEFAULT)]);$user=['id'=>(int)$db->lastInsertId(),'is_active'=>0,'role'=>'customer'];}
-  // Do not modify existing credentials. Pending users can request another verification message.
-  if ((int)$user['is_active']===0 && $user['role']==='customer'){
-    $q=$db->prepare('UPDATE pdg_users SET password_hash=? WHERE id=? AND is_active=0 AND role=\'customer\'');$q->execute([password_hash($password,PASSWORD_DEFAULT),$user['id']]);
+  $pending = !$user;
+  $passwordHash = null;
+  if (!$user){
+    $q=$db->prepare("INSERT INTO pdg_users(email,password_hash,role,is_active) VALUES (?,?,'customer',0)");
+    $passwordHash=password_hash($password,PASSWORD_DEFAULT);
+    $q->execute([$email,$passwordHash]);
+    $user=['id'=>(int)$db->lastInsertId()];
+  } elseif ((int)$user['is_active']===0 && $user['role']==='customer') {
+    $q=$db->prepare('SELECT 1 FROM pdg_email_tokens WHERE user_id=? LIMIT 1');
+    $q->execute([$user['id']]);
+    $pending=(bool)$q->fetchColumn();
+  }
+  if ($pending){
+    if ($passwordHash===null) {
+      $q=$db->prepare("UPDATE pdg_users SET password_hash=? WHERE id=? AND is_active=0 AND role='customer'");
+      $q->execute([password_hash($password,PASSWORD_DEFAULT),$user['id']]);
+    }
     $token=bin2hex(random_bytes(32));
     $q=$db->prepare('DELETE FROM pdg_email_tokens WHERE user_id=?');$q->execute([$user['id']]);
     $q=$db->prepare("INSERT INTO pdg_email_tokens(token_hash,user_id,expires_at) VALUES (?,?,DATE_ADD(NOW(),INTERVAL 30 MINUTE))");$q->execute([hash('sha256',$token),$user['id']]);
@@ -58,7 +72,10 @@ try {
     $url='https://pdgsystems.bg/verify-account.html#token='.$token;
     $body="Здравейте,\n\nПотвърдете имейла си в PDG Systems чрез линка:\n".$url."\n\nЛинкът е валиден 30 минути. Ако не сте заявявали регистрация, игнорирайте това съобщение.";
     $ok=mail($email,'PDG Systems - Potvarzhdenie na email',$body,"From: no-reply@pdgsystems.bg\r\nContent-Type: text/plain; charset=UTF-8");
-    if (!$ok) error_log('PDG registration email delivery failed');
+    if (!$ok) {
+      error_log('PDG registration email delivery failed');
+      response(503,['error'=>'registration_unavailable']);
+    }
   }
   response(200,['ok'=>true]);
 } catch(Throwable $e) {

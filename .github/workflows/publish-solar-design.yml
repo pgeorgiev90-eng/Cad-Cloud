@@ -3,7 +3,7 @@ on:
   push:
     paths:
       - '.github/workflows/publish-solar-design.yml'
-      - 'roof-cad.html'
+      - 'roof-cad.php'
 permissions:
   contents: read
 concurrency:
@@ -23,7 +23,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import re, subprocess
-          for i, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', Path('roof-cad.html').read_text(), re.S)):
+          for i, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', Path('roof-cad.php').read_text(), re.S)):
               if code.strip():
                   p=Path('/tmp/solar-'+str(i)+'.js')
                   p.write_text(code)
@@ -45,6 +45,7 @@ jobs:
           set net:max-retries 2
           set net:timeout 20
           set cmd:fail-exit true
-          put roof-cad.html -o /roof-cad.html
+          put api/cad-page-access.php -o /api/cad-page-access.php
+          put roof-cad.php -o /roof-cad.php
           bye
           LFTP

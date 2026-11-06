@@ -5,6 +5,15 @@ on:
     branches: [main]
     paths:
       - index.html
+      - api/cad-page-access.php
+      - api/account-draft.php
+      - api/registration-draft.php
+      - auth.html
+      - account-draft.html
+      - verify-account.html
+      - roof-cad.php
+      - electrical-cad.php
+      - solar-cad.webmanifest
       - api/admin-common.php
       - api/cad-projects.php
       - cad-account-projects.js
@@ -40,6 +49,11 @@ jobs:
           node --check admin-electric.js
           php -l api/admin-common.php
           php -l api/cad-projects.php
+          php -l api/cad-page-access.php
+          php -l api/account-draft.php
+          php -l api/registration-draft.php
+          php -l roof-cad.php
+          php -l electrical-cad.php
           node --check cad-account-projects.js
           node --check admin-workspace.js
       - name: Publish updated website files over FTPS
@@ -53,7 +67,7 @@ jobs:
           import os
           import ssl
 
-          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
+          paths = ('assets/solar-cad-homepage.webp', 'assets/electric-cad-homepage.webp', 'pdg-helper.js', 'api/admin-common.php', 'api/cad-projects.php', 'cad-account-projects.js', 'admin-workspace.js', 'admin-dashboard.html', 'api/cad-page-access.php', 'api/account-draft.php', 'api/registration-draft.php', 'auth.html', 'account-draft.html', 'verify-account.html', 'roof-cad.php', 'electrical-cad.php', 'solar-cad.webmanifest', 'roof-cad.html', 'electrical-cad.html', 'api/contact-enquiries.php', 'contact-enquiries.js', 'admin-electric.js', 'admin-electric.html', 'index.html')
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
               ftp.connect(os.environ['FTP_HOST'], 21)
               ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])

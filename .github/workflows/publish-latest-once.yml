@@ -62,7 +62,7 @@ jobs:
           python - <<'PYJS'
           from pathlib import Path
           import re, subprocess
-          for index, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', (Path('roof-cad.html').read_text()+Path('electrical-cad.html').read_text()), re.S)):
+          for index, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', (Path('roof-cad.php').read_text()+Path('electrical-cad.php').read_text()), re.S)):
               if code.strip():
                   script=Path('/tmp/pdg-editor-'+str(index)+'.js'); script.write_text(code)
                   subprocess.run(['node','--check',str(script)],check=True)

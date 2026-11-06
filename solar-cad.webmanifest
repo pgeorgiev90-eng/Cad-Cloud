@@ -1,10 +1,10 @@
 {
- "id":"./roof-cad.html",
+ "id":"./roof-cad.php",
  "name":"PDG Solar CAD",
  "short_name":"PDG Solar CAD",
  "description":"Покриви, фотоволтаични панели и оферти на едно място.",
  "lang":"bg",
- "start_url":"./roof-cad.html?mobile=1",
+ "start_url":"./roof-cad.php?mobile=1",
  "scope":"./",
  "display":"standalone",
  "background_color":"#f3f8fa",

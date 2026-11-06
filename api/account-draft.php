@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-// Draft: not connected to public forms or deployed. Requires security review and migrations.
+// Shared PDG account sessions for CAD and administration.
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -25,7 +25,7 @@ if ($action === 'session' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         $file = dirname(__DIR__, 2) . '/pdg-shop-db.php';
         if (is_file($file)) {
             $cfg = require $file;
-            $registrationAvailable = is_array($cfg) && ($cfg['registration_enabled'] ?? false) === true;
+            $registrationAvailable = is_array($cfg) && ($cfg['cad_registration_enabled'] ?? true) === true;
         }
     } catch (Throwable $e) { $registrationAvailable = false; }
     if (isset($_SESSION['user']['id'])) {
