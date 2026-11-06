@@ -1,0 +1,106 @@
+name: Publish Electric CAD catalog fix
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-electric-cad-catalog-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7ddbc05173dcf76561f0de2a29902d42033b735c
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          ref: cd6176c7f47f6705bf239fd11d4964e569e5f0aa
+          path: reviewed
+      - name: Prepare and validate four Electric CAD files
+        run: |
+          sed -e 's/electrical-busbar-core.js?v=wire1/electrical-busbar-core.js?v=shop1/' \
+              -e 's/electrical-catalog.js?v=wire1/electrical-catalog.js?v=shop1/' \
+              -e 's/electrical-quote.js?v=20261105/electrical-quote.js?v=shop1/' \
+              baseline/electrical-cad.php > reviewed/electrical-cad.php
+          php -l reviewed/electrical-cad.php
+          cd reviewed
+          for path in electrical-busbar-core.js electrical-catalog.js electrical-quote.js; do node --check "$path" || exit; done
+          node --test tests/electric-cad-core.test.cjs
+      - name: Publish and verify four files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, os, ssl
+          from pathlib import Path
+
+          paths = ['electrical-busbar-core.js', 'electrical-catalog.js', 'electrical-quote.js', 'electrical-cad.php']
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          suffix = '.cad-' + os.environ['GITHUB_RUN_ID']
+          originals = {p: read(p) for p in paths}
+          for p in paths:
+              if originals[p] not in ((Path('baseline') / p).read_bytes(), payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + p + suffix, io.BytesIO(payload[p]))
+                  if read(p + suffix) != payload[p]:
+                      raise RuntimeError('Staged content mismatch: ' + p)
+              for p in paths:
+                  changed.append(p)
+                  ftp.rename(p + suffix, p)
+              for p in paths:
+                  if read(p) != payload[p]:
+                      raise RuntimeError('Published content mismatch: ' + p)
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  if read(p) == originals[p]:
+                      continue
+                  ftp.storbinary('STOR ' + p + suffix, io.BytesIO(originals[p]))
+                  ftp.rename(p + suffix, p)
+                  if read(p) != originals[p]:
+                      raise RuntimeError('Rollback verification failed: ' + p)
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(p + suffix)
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify public JavaScript and catalog endpoints
+        shell: python
+        run: |
+          import json, time, urllib.request
+          from pathlib import Path
+          def get(path):
+              query = '&' if '?' in path else '?'
+              with urllib.request.urlopen('https://pdgsystems.bg/' + path + query + 'deploy_check=' + str(time.time_ns()), timeout=25) as response:
+                  return response.read()
+          for p in ['electrical-busbar-core.js', 'electrical-catalog.js', 'electrical-quote.js']:
+              assert get(p) == (Path('reviewed') / p).read_bytes(), p
+          shop = json.loads(get('api/products.php'))['products']
+          cad = json.loads(get('api/electric-catalog.php'))['products']
+          electrical = [p for p in shop if p['category'].startswith('Електроапаратура')]
+          assert electrical and cad
+          breaker = next(p for p in electrical if p['code'] == 'MC216233S-')
+          assert json.loads(get('api/product-details.php?id=' + str(breaker['id'])))['product']['code'] == breaker['code']
+          print(f'Public APIs: {len(electrical)} shop electrical products and {len(cad)} CAD entries')
