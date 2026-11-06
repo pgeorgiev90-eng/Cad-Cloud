@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .github/workflows/publish-homepage.yml
       - index.html
       - api/cad-page-access.php
       - api/account-draft.php
@@ -77,3 +78,10 @@ jobs:
                   with open(path, 'rb') as source:
                       ftp.storbinary(f'STOR {temporary}', source)
                   ftp.rename(temporary, f'/{path}')
+      - name: Verify deployed CAD access
+        run: |
+          for editor in roof-cad.php electrical-cad.php; do
+            redirect=$(curl -fsS --max-time 20 -o /dev/null -w '%{redirect_url}' "https://pdgsystems.bg/$editor?release=$GITHUB_SHA")
+            test "$redirect" = "https://pdgsystems.bg/auth.html?next=$editor"
+          done
+          curl -fsS --max-time 20 "https://pdgsystems.bg/api/account-draft.php?action=session&release=$GITHUB_SHA" | python -c 'import json,sys; s=json.load(sys.stdin); assert s["user"] is None and s["registration_available"] is True'
