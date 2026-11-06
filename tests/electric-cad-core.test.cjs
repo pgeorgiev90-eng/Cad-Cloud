@@ -114,3 +114,56 @@ test('free mounting rejects collisions and devices outside the plate or cabinet 
   assert.throws(() => busbar.validate(p([{ ...a, x: 405 }])), /извън монтажната плоча/);
   assert.throws(() => busbar.validate(p([{ ...a, depthMm: 261 }])), /извън монтажната плоча/);
 });
+
+test('busbar taps share their phase and remain valid after moving a vertex', () => {
+  const bar={id:'bar-one',phase:'PE',width:20,thickness:5,color:'#ffff00',
+    points:[{x:10,y:50,z:30},{x:110,y:50,z:30}]};
+  const a=wires.nearestTap(bar,{x:35,y:54}),b=wires.nearestTap(bar,{x:85,y:49});
+  const items=[device('a',0),device('b',1)];
+  assert.deepEqual(wires.tapPosition(bar,a),{x:35,y:50});
+  const connection=link(a,end('a','top'),'PE');
+  assert.doesNotThrow(()=>busbar.validate(project(items,[connection,link(b,end('b','top'),'PE')],{busbars:[bar]})));
+  assert.throws(()=>busbar.validate(project(items,[connection,link(b,end('b','top'),'L1')],{busbars:[bar]})),/Несъвместими/);
+  bar.points[1].y=90;
+  assert.deepEqual(wires.tapPosition(bar,a),{x:35,y:60});
+});
+
+test('DWG traces only a supported phase path between two explicit terminals', async () => {
+  const fs=require('node:fs');
+  const src=fs.readFileSync(require.resolve('../electrical-dwg-data.js'),'utf8');
+  const {equipmentFromDwg}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+  const mark=(name,x,y)=>({type:'INSERT',name,insertionPoint:{x,y}});
+  const line=(layer,x,y,ex,ey)=>({type:'LINE',layer,startPoint:{x,y},endPoint:{x:ex,y:ey}});
+  const result=equipmentFromDwg({entities:[
+    mark('QF1_BOTTOM_1',0,0),mark('QF2_TOP_1',10,10),mark('QF3_TOP_1',9,9),mark('QF4_BOTTOM_1',1,1),
+    {type:'LWPOLYLINE',layer:'L1',flag:0,elevation:0,extrusionDirection:{x:0,y:0,z:0},
+      vertices:[{x:0,y:0},{x:0,y:10},{x:10,y:10}]},
+    line('WIRE',1,1,9,9),line('L2',0,0,2,2)
+  ]});
+  assert.equal(result.blocks,0);
+  assert.deepEqual(result.proposals,[
+    {from:{ref:'QF1',side:'bottom',pole:0},to:{ref:'QF2',side:'top',pole:0},phase:'L1'},
+    {from:{ref:'QF4',side:'bottom',pole:0},to:{ref:'QF3',side:'top',pole:0},phase:''}
+  ]);
+  assert.equal(result.review.length,1);
+  assert.equal(result.skipped,0);
+});
+
+test('DWG proposal places a fixed breaker and DIN equipment without modifying the source', () => {
+  const {propose}=require('../electrical-dwg-plan.js');
+  const original=project([]);
+  const product=(sku,type,widthMm,heightMm,depthMm,poles)=>({sku,name:sku,type,widthMm,heightMm,depthMm,poles,modules:Math.ceil(widthMm/18)});
+  const devices=[{ref:'QF1',product:product('MAIN','MCCB',105,241,190.5,3)},
+    {ref:'QF2',product:product('OUT','MCB',17.8,83,70,1)}];
+  const dwgEnd=(ref,side,pole)=>({ref,side,pole});
+  const valid={from:dwgEnd('QF1','bottom',0),to:dwgEnd('QF2','top',0),phase:'L1'};
+  const invalid={...valid,to:dwgEnd('QF2','top',1),phase:'L2'};
+  const result=propose(original,devices,[valid,invalid]);
+  assert.equal(original.items.length,0);
+  assert.equal(result.project.mode,'free');
+  assert.equal(result.project.dinRails.length,1);
+  assert.equal(result.project.items.length,2);
+  assert.equal(result.project.connections.length,1);
+  assert.equal(result.project.connections[0].bends.length,4);
+  assert.equal(result.unresolved.length,1);
+});

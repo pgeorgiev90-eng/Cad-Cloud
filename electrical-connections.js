@@ -9,13 +9,32 @@ const phases = Object.freeze({
     N:{label:'N · син',color:'#087dc2'},
     PE:{label:'PE · жълто-зелен',color:'#f2c321',stripe:'#237b3d'}
 });
-const key = terminal => terminal.device + ':' + terminal.side + ':' + terminal.pole;
-const validEnd = (end, devices) => {
+const key = terminal => terminal.bar ? 'bar:'+terminal.bar : terminal.device+':'+terminal.side+':'+terminal.pole;
+function tapPosition(bar, end) {
+    const a=bar?.points?.[end.segment], b=bar?.points?.[end.segment+1];
+    if (!a||!b||!Number.isInteger(end.segment)||!Number.isFinite(end.fraction)||end.fraction<0||end.fraction>1) return null;
+    return {x:a.x+(b.x-a.x)*end.fraction,y:a.y+(b.y-a.y)*end.fraction};
+}
+function nearestTap(bar, point) {
+    let best=null, distance=Infinity;
+    for(let segment=0;segment<bar.points.length-1;segment++){
+        const a=bar.points[segment],b=bar.points[segment+1],dx=b.x-a.x,dy=b.y-a.y;
+        const length=dx*dx+dy*dy;
+        if(!length)continue;
+        const fraction=Math.max(0,Math.min(1,((point.x-a.x)*dx+(point.y-a.y)*dy)/length));
+        const end={bar:bar.id,segment,fraction},p=tapPosition(bar,end);
+        const d=Math.hypot(point.x-p.x,point.y-p.y);
+        if(d<distance){best=end;distance=d;}
+    }
+    return best;
+}
+const validEnd = (end, devices, bars) => {
+    if(end?.bar)return !end.device&&Object.hasOwn(phases,bars.get(end.bar)?.phase)&&!!tapPosition(bars.get(end.bar),end);
     const device = devices.get(end?.device);
     return !!device && ['top','bottom'].includes(end.side) &&
         Number.isInteger(end.pole) && end.pole >= 0 && end.pole < poleCount(device);
 };
-function validate(items, connections = []) {
+function validate(items, connections = [], busbars = []) {
     const devices = new Map();
     for (const item of items) {
         if (item.connectionId === undefined) continue;
@@ -25,6 +44,13 @@ function validate(items, connections = []) {
     }
     if (!Array.isArray(connections) || connections.length > 300) throw Error('Невалиден списък с връзки.');
     const pairs = new Set();
+    const bars = new Map();
+    for (const bar of busbars) {
+        if (bar.phase!==undefined&&!Object.hasOwn(phases,bar.phase)) throw Error('Невалиден проводник на шина.');
+        if (bar.id===undefined) continue;
+        if (typeof bar.id!=='string'||!(/^[a-z0-9-]{1,64}$/i.test(bar.id))||bars.has(bar.id)) throw Error('Невалиден идентификатор на шина.');
+        bars.set(bar.id,bar);
+    }
     const parents = new Map();
     const conductorByNet = new Map();
     function root(terminal) {
@@ -32,8 +58,9 @@ function validate(items, connections = []) {
         return terminal;
     }
     for (const connection of connections) {
-        if (!validEnd(connection?.from,devices) || !validEnd(connection?.to,devices) ||
-            connection.from.device === connection.to.device ||
+        if (!validEnd(connection?.from,devices,bars) || !validEnd(connection?.to,devices,bars) ||
+            (connection.from.bar&&connection.to.bar) ||
+            (connection.from.device&&connection.from.device === connection.to.device) ||
             (connection.phase !== undefined && !Object.hasOwn(phases, connection.phase)) ||
             !Array.isArray(connection.bends) || connection.bends.length > 24 ||
             !connection.bends.every(p => p && Number.isFinite(p.x) && p.x>=0 && p.x<=1600 &&
@@ -42,7 +69,7 @@ function validate(items, connections = []) {
         if (pairs.has(pair)) throw Error('Тези клеми вече са свързани.');
         pairs.add(pair);
         const from = root(key(connection.from)), to = root(key(connection.to));
-        const phasesInNet = new Set([conductorByNet.get(from), conductorByNet.get(to), connection.phase].filter(Boolean));
+        const phasesInNet = new Set([conductorByNet.get(from), conductorByNet.get(to), bars.get(connection.from.bar)?.phase, bars.get(connection.to.bar)?.phase, connection.phase].filter(Boolean));
         if (phasesInNet.size > 1) {
             throw Error('Несъвместими проводници в една електрическа мрежа: '+[...phasesInNet].join(' и ')+'.');
         }
@@ -80,7 +107,7 @@ function validGroup(positions, fixed, width, height) {
     return positions.every((p,i)=>p.x>=0 && p.y>=0 && p.x+p.width<=width && p.y+p.height<=height &&
         !fixed.some(q=>overlaps(p,q)) && !positions.slice(0,i).some(q=>overlaps(p,q)));
 }
-const api = {poleCount,key,validate,terminalPosition,route,phases,validGroup};
+const api = {poleCount,key,validate,terminalPosition,route,phases,validGroup,tapPosition,nearestTap};
 if (typeof module !== 'undefined') module.exports = api;
 root.PDGConnections = api;
 })(globalThis);
