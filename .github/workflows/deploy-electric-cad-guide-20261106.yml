@@ -1,0 +1,137 @@
+name: Publish Electric CAD drawing guides
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-electric-cad-guide-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7ddbc05173dcf76561f0de2a29902d42033b735c
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          ref: c591cbc1eef4dcd11a547bc731a47cd24bfeda4f
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: 095f84e432e8bfcfa1b371a7be27cd476f57ddef
+          path: reviewed
+      - name: Prepare hosted page and test the reviewed changes
+        run: |
+          sed -e 's/electrical-busbar-core.js?v=wire1/electrical-busbar-core.js?v=shop1/' \
+              -e 's/electrical-catalog.js?v=wire1/electrical-catalog.js?v=schrack-dim1/' \
+              -e 's/electrical-quote.js?v=20261105/electrical-quote.js?v=shop1/' \
+              baseline/electrical-cad.php > /tmp/pdg-before-audit.php
+          sed -e 's/electrical-busbar-core.js?v=shop1/electrical-busbar-core.js?v=audit1/' \
+              -e 's/electrical-busbar.js?v=phase2/electrical-busbar.js?v=audit1/' \
+              -e 's/electrical-connections.js?v=phase2/electrical-connections.js?v=audit1/' \
+              /tmp/pdg-before-audit.php > previous/electrical-cad.php
+          python - <<'PYCODE'
+          from pathlib import Path
+          original = Path('previous/electrical-cad.php').read_text()
+          changes = {'connections':'audit1','busbar-core':'audit1','busbar':'audit1','catalog':'schrack-dim1','dwg-import':'1'}
+          for name,version in changes.items():
+              old = f'electrical-{name}.js?v={version}'
+              assert original.count(old)==1, old
+              original=original.replace(old,f'electrical-{name}.js?v=wire-dwg1')
+          original=original.replace('<script src="electrical-dwg-import.js','<script src="electrical-dwg-plan.js?v=1"></script><script src="electrical-dwg-import.js')
+          Path('previous/electrical-cad.php').write_text(original)
+          for name in ('connections','busbar-core','busbar'):
+              old = f'electrical-{name}.js?v=wire-dwg1'
+              assert original.count(old)==1, old
+              original=original.replace(old,f'electrical-{name}.js?v=channel1')
+          Path('previous/electrical-cad.php').write_text(original)
+          Path('reviewed/electrical-cad.php').write_text(original.replace('electrical-busbar.js?v=channel1','electrical-busbar.js?v=guide1'))
+          PYCODE
+          php -l reviewed/electrical-cad.php
+          cd reviewed
+          for f in electrical-connections.js electrical-busbar-core.js electrical-busbar.js; do node --check "$f" || exit; done
+          node --test tests/electric-cad-core.test.cjs
+      - name: Publish and verify CAD files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, os, ssl
+          from pathlib import Path
+          paths = ['electrical-busbar.js','electrical-cad.php']
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          stage = {p: '.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + p for p in paths}
+          originals = {}
+          for p in paths:
+              old_file = Path('previous') / p
+              expected = old_file.read_bytes() if old_file.exists() else None
+              try:
+                  old = read(p)
+              except ftplib.error_perm as error:
+                  if expected is not None or not str(error).startswith('550'):
+                      raise
+                  old = None
+              if old not in (expected, payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+              originals[p] = old
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(stage[p], p)
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  if originals[p] is None:
+                      ftp.delete(p)
+                      continue
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(originals[p]))
+                  ftp.rename(stage[p], p)
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(stage[p])
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify the public JavaScript and CAD catalog
+        shell: python
+        run: |
+          import json, time, urllib.request
+          from pathlib import Path
+          def get(path):
+              with urllib.request.urlopen('https://pdgsystems.bg/' + path, timeout=30) as r:
+                  return r.read()
+          scripts = ('connections','busbar-core','busbar','catalog','dwg-import','dwg-worker','dwg-data','dwg-plan')
+          for name in scripts:
+              p = f'electrical-{name}.js'
+              version = 'channel1' if name in ('connections','busbar-core','busbar') else ('1' if name=='dwg-plan' else 'wire-dwg1')
+              if name=='busbar': version='guide1'
+              assert get(f'{p}?v={version}') == (Path('reviewed') / p).read_bytes(), p
+          cad = json.loads(get('api/electric-catalog.php?deploy_check=' + str(time.time_ns())))['products']
+          assert sum(p['type'] in ('MCB','MCCB') for p in cad) >= 439
+          assert any(p['sku']=='MC216233S-' and p['depthMm']==190.5 for p in cad)
+          print('Verified public channel routing, DWG scripts and breaker catalog')
