@@ -1,0 +1,107 @@
+name: Publish Electric CAD audit fixes
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-electric-cad-audit-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7ddbc05173dcf76561f0de2a29902d42033b735c
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          ref: 82174942e20a4d597b34cbaf3f240bc339caaacc
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: b0c0d91eda17de3a94c0316cdb963b2288c901e7
+          path: reviewed
+      - name: Prepare hosted page and test the reviewed changes
+        run: |
+          sed -e 's/electrical-busbar-core.js?v=wire1/electrical-busbar-core.js?v=shop1/' \
+              -e 's/electrical-catalog.js?v=wire1/electrical-catalog.js?v=schrack-dim1/' \
+              -e 's/electrical-quote.js?v=20261105/electrical-quote.js?v=shop1/' \
+              baseline/electrical-cad.php > previous/electrical-cad.php
+          sed -e 's/electrical-busbar-core.js?v=shop1/electrical-busbar-core.js?v=audit1/' \
+              -e 's/electrical-busbar.js?v=phase2/electrical-busbar.js?v=audit1/' \
+              -e 's/electrical-connections.js?v=phase2/electrical-connections.js?v=audit1/' \
+              previous/electrical-cad.php > reviewed/electrical-cad.php
+          php -l reviewed/electrical-cad.php
+          cd reviewed
+          for f in electrical-connections.js electrical-busbar-core.js electrical-busbar.js; do node --check "$f" || exit; done
+          node --test tests/electric-cad-core.test.cjs
+      - name: Publish and verify four files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, hashlib, io, os, ssl
+          from pathlib import Path
+          paths = ['electrical-connections.js','electrical-busbar-core.js','electrical-busbar.js','electrical-cad.php']
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          stage = {p: '.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + p for p in paths}
+          originals = {p: read(p) for p in paths}
+          for p in paths:
+              old = originals[p]
+              expected = (Path('previous') / p).read_bytes()
+              audited_live = p == 'electrical-busbar.js' and hashlib.sha256(old).hexdigest() == '4a5290b2fd3a638bc8c7cc850043c0d362f63d6effb217985514fc2593749542'
+              if old not in (expected, payload[p]) and not audited_live:
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(stage[p], p)
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(originals[p]))
+                  ftp.rename(stage[p], p)
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(stage[p])
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify the public JavaScript and CAD catalog
+        shell: python
+        run: |
+          import json, time, urllib.request
+          from pathlib import Path
+          def get(path):
+              with urllib.request.urlopen('https://pdgsystems.bg/' + path, timeout=30) as r:
+                  return r.read()
+          for p in ('electrical-connections.js','electrical-busbar-core.js','electrical-busbar.js'):
+              assert get(p + '?v=audit1') == (Path('reviewed') / p).read_bytes(), p
+          cad = json.loads(get('api/electric-catalog.php?deploy_check=' + str(time.time_ns())))['products']
+          assert sum(p['type'] in ('MCB','MCCB') for p in cad) >= 439
+          assert any(p['sku']=='MC216233S-' and p['depthMm']==190.5 for p in cad)
+          print('Verified public audit scripts and breaker catalog')
