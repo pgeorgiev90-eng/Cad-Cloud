@@ -42,11 +42,10 @@ function shop_cents($price): ?int {
     $cents=(int)$m[1]*100+(int)str_pad($m[2]??'',2,'0');
     return $cents>0 ? $cents : null;
 }
-function shop_customer_cart(array $account): void {
-    shop_session();
-    if (($_SESSION['account_id']??null)===$account['id']) return;
-    $_SESSION=['account_id'=>$account['id'],'cart'=>[],'csrf'=>bin2hex(random_bytes(32)),
-        'checkout_key'=>bin2hex(random_bytes(32))];
+function shop_customer_cart(): void {
+    $_SESSION['cart']??=[];
+    $_SESSION['csrf']??=bin2hex(random_bytes(32));
+    $_SESSION['checkout_key']??=bin2hex(random_bytes(32));
 }
 function shop_quote(PDO $db, array $account): array {
     $items=[]; $subtotal=0; $unavailable=false;

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-function pdg_pricing_account(PDO $db): ?array {
+function pdg_pricing_account(PDO $db, bool $keepSession=false): ?array {
     if (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS']==='off' || empty($_COOKIE['PDGSESSION'])) return null;
     ini_set('session.use_strict_mode','1');
     ini_set('session.use_only_cookies','1');
@@ -14,15 +14,15 @@ function pdg_pricing_account(PDO $db): ?array {
     $last=(int)($_SESSION['last_activity']??0);
     $valid=$id>0 && $started>0 && $last>0 && $now-$last<=1800 && $now-$started<=43200;
     if ($valid) $_SESSION['last_activity']=$now;
-    session_write_close();
-    // The cart has a separate session and must start from its own cookie.
-    session_id('');
-    $_SESSION=[];
+    if (!$keepSession || !$valid) session_write_close();
     if (!$valid) return null;
     $q=$db->prepare('SELECT id,role FROM pdg_users WHERE id=? AND is_active=1');
     $q->execute([$id]);
     $user=$q->fetch();
-    if (!$user) return null;
+    if (!$user) {
+        if ($keepSession) session_write_close();
+        return null;
+    }
     $discount=0;
     if ($user['role']==='customer') {
         try {

@@ -3,9 +3,9 @@ declare(strict_types=1);
 require __DIR__.'/shop-common.php';
 try {
     $db=shop_db();
-    $account=pdg_pricing_account($db);
+    $account=pdg_pricing_account($db,true);
     if($account===null)shop_answer(401,['error'=>'authentication_required']);
-    shop_customer_cart($account);
+    shop_customer_cart();
     $db->exec(file_get_contents(dirname(__DIR__).'/database/orders-schema.sql'));
     if ($_SERVER['REQUEST_METHOD']==='GET') shop_answer(200,shop_quote($db,$account));
     $input=shop_input();

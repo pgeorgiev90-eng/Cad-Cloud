@@ -3,9 +3,9 @@ declare(strict_types=1);
 require __DIR__.'/shop-common.php';
 try {
     $db=shop_db();
-    $account=pdg_pricing_account($db);
+    $account=pdg_pricing_account($db,true);
     if($account===null)shop_answer(401,['error'=>'authentication_required']);
-    shop_customer_cart($account);
+    shop_customer_cart();
     $input=shop_input();
     $key=$input['checkout_key']??'';
     if (!is_string($key)||!preg_match('/^[a-f0-9]{64}$/D',$key)) shop_answer(422,['error'=>'invalid_input']);

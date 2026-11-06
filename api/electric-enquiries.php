@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/shop-common.php';require __DIR__.'/electric-common.php';
-try{$db=shop_db();$account=pdg_pricing_account($db);if($account===null)shop_answer(401,['error'=>'authentication_required']);shop_customer_cart($account);if($_SERVER['REQUEST_METHOD']==='GET'){if(empty($_SESSION['electric_request_key'])||isset($_SESSION['electric_submitted'][$_SESSION['electric_request_key']]))$_SESSION['electric_request_key']=bin2hex(random_bytes(24));shop_answer(200,['csrf'=>$_SESSION['csrf'],'request_key'=>$_SESSION['electric_request_key']]);}
+try{$db=shop_db();$account=pdg_pricing_account($db,true);if($account===null)shop_answer(401,['error'=>'authentication_required']);shop_customer_cart();if($_SERVER['REQUEST_METHOD']==='GET'){if(empty($_SESSION['electric_request_key'])||isset($_SESSION['electric_submitted'][$_SESSION['electric_request_key']]))$_SESSION['electric_request_key']=bin2hex(random_bytes(24));shop_answer(200,['csrf'=>$_SESSION['csrf'],'request_key'=>$_SESSION['electric_request_key']]);}
  if($_SERVER['REQUEST_METHOD']!=='POST')shop_answer(405,['error'=>'method_not_allowed']);if(!hash_equals($_SESSION['csrf'],(string)($_SERVER['HTTP_X_CSRF_TOKEN']??'')))shop_answer(403,['error'=>'invalid_request']);
  $raw=file_get_contents('php://input',false,null,0,262145);if(strlen($raw)>262144)shop_answer(413,['error'=>'request_too_large']);$input=json_decode($raw,true);if(!is_array($input))shop_answer(422,['error'=>'invalid_input']);
  $key=$input['request_key']??'';if(!is_string($key)||!hash_equals($_SESSION['electric_request_key']??'',$key)||$key==='')shop_answer(409,['error'=>'request_expired']);
