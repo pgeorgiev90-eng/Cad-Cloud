@@ -93,3 +93,24 @@ test('DWG block extraction groups identical equipment and preserves quantities',
   assert.equal(result.rows[0].count,2);
   assert.ok(result.rows[0].codes.includes('SCHRACK-12345'));
 });
+
+test('a terminal network rejects different conductors even through an unlabelled link', () => {
+  const items = ['a', 'b', 'c', 'd'].map((id, col) => device(id, col));
+  const a = end('a', 'bottom'), b = end('b', 'top');
+  const c = end('c', 'top'), d = end('d', 'top');
+  const first = link(a, b);
+  const legacy = { from: b, to: c, bends: [] };
+  assert.doesNotThrow(() => wires.validate(items, [first, legacy, link(c, d)]));
+  assert.throws(() => wires.validate(items, [first, link(a, d, 'L2')]), /Несъвместими/);
+  assert.throws(() => wires.validate(items, [first, legacy, link(c, d, 'L2')]), /Несъвместими/);
+});
+
+test('free mounting rejects collisions and devices outside the plate or cabinet depth', () => {
+  const a = { ...device('a', 0), x: 0, y: 0, widthMm: 100, heightMm: 100, depthMm: 180 };
+  const b = { ...device('b', 0), x: 100, y: 0, widthMm: 100, heightMm: 100 };
+  const p = items => project(items, [], { mode: 'free' });
+  assert.doesNotThrow(() => busbar.validate(p([a, b])));
+  assert.throws(() => busbar.validate(p([a, { ...b, x: 99 }])), /Припокриващи/);
+  assert.throws(() => busbar.validate(p([{ ...a, x: 405 }])), /извън монтажната плоча/);
+  assert.throws(() => busbar.validate(p([{ ...a, depthMm: 261 }])), /извън монтажната плоча/);
+});

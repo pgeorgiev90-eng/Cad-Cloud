@@ -25,6 +25,12 @@ function validate(items, connections = []) {
     }
     if (!Array.isArray(connections) || connections.length > 300) throw Error('Невалиден списък с връзки.');
     const pairs = new Set();
+    const parents = new Map();
+    const conductorByNet = new Map();
+    function root(terminal) {
+        while (parents.has(terminal)) terminal = parents.get(terminal);
+        return terminal;
+    }
     for (const connection of connections) {
         if (!validEnd(connection?.from,devices) || !validEnd(connection?.to,devices) ||
             connection.from.device === connection.to.device ||
@@ -35,6 +41,13 @@ function validate(items, connections = []) {
         const pair = [key(connection.from),key(connection.to)].sort().join('|');
         if (pairs.has(pair)) throw Error('Тези клеми вече са свързани.');
         pairs.add(pair);
+        const from = root(key(connection.from)), to = root(key(connection.to));
+        const phasesInNet = new Set([conductorByNet.get(from), conductorByNet.get(to), connection.phase].filter(Boolean));
+        if (phasesInNet.size > 1) {
+            throw Error('Несъвместими проводници в една електрическа мрежа: '+[...phasesInNet].join(' и ')+'.');
+        }
+        if (from !== to) parents.set(to, from);
+        conductorByNet.set(from, phasesInNet.values().next().value);
     }
     return connections;
 }

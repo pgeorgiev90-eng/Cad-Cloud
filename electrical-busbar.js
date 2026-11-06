@@ -4,11 +4,17 @@
 const C=PDGBusbar, W=PDGConnections, oldSelection=showSelection,oldPlace=place;
 let connections=[], wiring=false, wireStart=null, wireBends=[];
 const marked=new Set();
+const undoStack=[],redoStack=[];
+let lastSnapshot,restoring=false;
 let marking=false;
 let mode='din',bars=[],active=-1,vertex=-1,draft=null,editing=false,moving=null,moduleTemplate=null,suppressClick=false,placing=false,cabinet={sku:'',widthMm:600,heightMm:800,depthMm:260};
-const scale=1;const pitch=()=>Math.max(95,(cabinet.heightMm-180)/rows);const usableW=()=>Math.max(0,cabinet.widthMm-Math.min(96,cabinet.widthMm*.16)),usableH=()=>Math.max(0,cabinet.heightMm-125);const inset=()=>Math.max(0,(usableW()-modules*18)/2);const widthOf=it=>it.widthMm||it.width*18,heightOf=it=>it.heightMm||83;const deviceMeta=p=>p?{widthMm:p.widthMm,heightMm:p.heightMm,depthMm:p.depthMm,imageUrl:p.imageUrl,sourceUrl:p.sourceUrl,poles:p.poles,catalogType:p.type}:{};
+const scale=1;
+const geometry=()=>C.layout(cabinet,rows,modules);
+const pitch=()=>geometry().pitch,usableW=()=>geometry().width,usableH=()=>geometry().height,inset=()=>geometry().inset;
+const {widthOf,heightOf}=C;
+const deviceMeta=p=>p?{widthMm:p.widthMm,heightMm:p.heightMm,depthMm:p.depthMm,imageUrl:p.imageUrl,sourceUrl:p.sourceUrl,poles:p.poles,catalogType:p.type}:{};
 const status=t=>$('status').textContent=t;
-const position=it=>({x:mode==='free'&&Number.isFinite(it.x)?it.x:inset()+it.col*18,y:mode==='free'&&Number.isFinite(it.y)?it.y:it.row*pitch()});
+const position=it=>C.position(it,mode,geometry());
 function terminalEntries() {
     return items.flatMap((item,index) => ['top','bottom'].flatMap(side =>
         Array.from({length:W.poleCount(item)},(_,pole) => {
@@ -18,7 +24,12 @@ function terminalEntries() {
 }
 const deviceTargets=()=>terminalEntries().map(({x,y})=>({x,y}));
 const targets=()=>deviceTargets().concat(bars.flatMap(b=>b.points));
-function pfrom(e){const s=$('drawing'),r=s.getBoundingClientRect();return C.snap({x:((e.clientX-r.left)*s.viewBox.baseVal.width/r.width-50)/scale,y:((e.clientY-r.top)*s.viewBox.baseVal.height/r.height-120)/scale,z:Number($('barDepth').value)},targets())}
+function drawingPoint(event){
+ const matrix=$('drawing').getScreenCTM();
+ const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
+ return {x:(point.x-50)/scale,y:(point.y-120)/scale,z:Number($('barDepth').value)};
+}
+function pfrom(event){return C.snap(drawingPoint(event),targets());}
 let fieldId=0;function field(parent,label,type,value,change,attrs={}){const l=document.createElement('label');l.textContent=label;parent.append(l);const input=document.createElement('input');input.type=type;Object.assign(input,attrs);input.id=input.id||'cad-field-'+(++fieldId);l.htmlFor=input.id;input.value=value;input.onchange=()=>change(input.value);parent.append(input);return input}
 function button(parent,label,run,id){const b=document.createElement('button');b.type='button';b.textContent=label;if(id)b.id=id;b.onclick=run;parent.append(b);return b}
 const side=document.querySelector('aside');const settings=document.createElement('section');settings.innerHTML='<h3>Монтаж и тоководещи шини</h3><label>Вид табло</label><select id="boardMode"><option value="din">Табло с DIN шини</option><option value="free">Празна монтажна кутия</option></select><p class="hint">Размерите на шините са в mm. При свободен монтаж апаратите се поставят и местят по мрежа 5 mm. Шините се чертаят в монтажния изглед.</p>';
@@ -30,10 +41,23 @@ field(settings,'Цвят','color','#e5b82a',()=>{}, {id:'barColor'});
 button(settings,'Чертай тоководеща шина',()=>{stopWire();if(view!=='front')setView('front');editing=true;draft=null;active=-1;selectedCatalog=null;placing=false;status('Щракни за начало, после за огъвки или друга клема. Завърши с бутона или Enter. Escape отказва.');redraw()},'drawBusbar');
 button(settings,'Завърши шина',finish,'finishBusbar');button(settings,'Откажи чертането',cancel,'cancelBusbar');
 button(settings,'Запази избраната шина като модул',()=>{if(!bars[active])return status('Избери шина.');moduleTemplate=JSON.parse(JSON.stringify(bars[active]));try{localStorage.setItem('pdg_busbar_module_v1',JSON.stringify(moduleTemplate));status('Модулът е запазен в този браузър.')}catch{status('Модулът е достъпен до затваряне на страницата.')}},'saveBusbarModule');
-button(settings,'Постави запазен модул',()=>{stopWire();if(!moduleTemplate)return status('Няма запазен модул.');setView('front');editing='module';draft=null;status('Щракни за начало на запазения модул.');},'placeBusbarModule');
+button(settings,'Постави запазен модул',()=>{stopWire();if(!moduleTemplate)return status('Няма запазен модул.');setView('front');placing=false;editing='module';status('Щракни за начало на запазения модул.');},'placeBusbarModule');
 try{const t=JSON.parse(localStorage.getItem('pdg_busbar_module_v1')||'null');if(t){C.validate({rows,modules,items:[],busbars:[t]});moduleTemplate=t}}catch{}
-const toolbar=document.querySelector('.toolbar');button(toolbar,'Страничен изглед',()=>setView('side'),'sideView');button(toolbar,'3D изглед',()=>setView('3d'),'threeView');
-$('boardMode').onchange=()=>{const next=$('boardMode').value;try{C.validate({...data(),mode:next});mode=next;cancel();redraw()}catch(err){$('boardMode').value=mode;status('Първо подреди апаратите по DIN редове: '+err.message)}};
+const toolbar=document.querySelector('.toolbar');
+const undoButton=button(toolbar,'↶ Отмени',()=>changeHistory(undoStack,redoStack,'Операцията е отменена.'),'cadUndo');
+const redoButton=button(toolbar,'↷ Повтори',()=>changeHistory(redoStack,undoStack,'Операцията е повторена.'),'cadRedo');
+button(toolbar,'Страничен изглед',()=>setView('side'),'sideView');button(toolbar,'3D изглед',()=>setView('3d'),'threeView');
+$('boardMode').onchange=()=>{
+ const next=$('boardMode').value;
+ if(next===mode)return;
+ try{
+  if(next==='din'&&items.some(item=>item.x!==undefined)){
+   throw Error('Свободно поставените апарати трябва първо да бъдат преместени в отделен DIN проект.');
+  }
+  C.validate({...data(),mode:next});
+  mode=next;cancel();
+ }catch(err){$('boardMode').value=mode;status(err.message);}
+};
 function finish(){if(draft?.points.length>=2){bars.push(draft);active=bars.length-1;vertex=0;draft=null;editing=false;showSelection();status('Шината е добавена. Избери точка за размери и отвор.')}else status('Необходими са поне две различни точки.');redraw()}
 function cancel(){stopWire();draft=null;editing=false;moving=null;redraw();status('Готов за работа.')}
 function params(){const b={width:Number($('barWidth').value),thickness:Number($('barThickness').value),color:$('barColor').value,points:[{x:0,y:0,z:Number($('barDepth').value)},{x:5,y:0,z:Number($('barDepth').value)}],holes:[]};C.validate({rows,modules,items:[],busbars:[b]});return b}
@@ -110,7 +134,18 @@ function renderWireList() {
             const option=document.createElement('option');option.value='';option.textContent='Без означение';conductor.prepend(option);
         }
         conductor.value=connection.phase||'';
-        conductor.onchange=()=>{if(conductor.value)connection.phase=conductor.value;else delete connection.phase;redraw();};
+        conductor.onchange=()=>{
+            const phase=conductor.value||undefined;
+            const updated={...connection,phase};
+            try {
+                W.validate(items,connections.map((link,i)=>i===index?updated:link));
+                connections[index]=updated;
+                redraw();
+            } catch(error) {
+                conductor.value=connection.phase||'';
+                status(error.message);
+            }
+        };
         row.append(conductor);
         button(row,'Изтрий',()=>{connections.splice(index,1);redraw();status('Връзката е премахната.');});
         wireRows.append(row);
@@ -166,10 +201,8 @@ $('drawing').addEventListener('click',event=>{
         return;
     }
     if (!wireStart || event.target.closest('[data-device]') || wireBends.length>=24) return;
-    const svg=$('drawing'), matrix=svg.getScreenCTM();
-    if (!matrix) return;
-    const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
-    const x=Math.round((point.x-50)/5)*5, y=Math.round((point.y-120)/5)*5;
+    const point=drawingPoint(event);
+    const x=Math.round(point.x/5)*5, y=Math.round(point.y/5)*5;
     if (x<0 || x>usableW() || y<0 || y>usableH()) return status('Чупката трябва да е в монтажната плоча.');
     wireBends.push({x,y});redraw();
 },true);
@@ -269,6 +302,7 @@ redraw=function(){
     const ids=new Set(items.map(it=>it.connectionId).filter(Boolean));
     connections=connections.filter(link=>ids.has(link.from.device)&&ids.has(link.to.device));
     if (wireStart && !ids.has(wireStart.device)) {wireStart=null;wireBends=[];}
+    rememberHistory();
     if (view==='schematic') {renderConnectionsSchematic();renderWireList();return;}
     boardRender();
     barsRender();
@@ -289,14 +323,106 @@ $('drawing').addEventListener('pointercancel',()=>{moving=null});
 // Ignore painted grid dots and cabinet backgrounds when placing free-mounted devices.
 $('drawing').addEventListener('click',e=>{if(suppressClick){suppressClick=false;return}if(view!=='front'||editing||!placing||e.target.closest('[data-device],[data-busbar]'))return;const p=pfrom(e);if(mode==='free')placeFree(p);else place(Math.floor(p.y/pitch()),Math.floor((p.x-inset())/18))});
 function placeFree(p){const d=selectedCatalog?['Каталожен артикул',selectedCatalog.modules,selectedCatalog.rating]:types[tool];const ww=selectedCatalog?.widthMm||d[1]*18,hh=selectedCatalog?.heightMm||83;if(p.x+ww>usableW()||p.y+hh>usableH()||selectedCatalog?.depthMm>cabinet.depthMm)return status('Апаратът е извън монтажната плоча.');if(items.some(it=>{const q=position(it);return p.x<q.x+widthOf(it)&&p.x+ww>q.x&&p.y<q.y+heightOf(it)&&p.y+hh>q.y}))return status('Позицията е заета.');items.push({type:selectedCatalog?'CAT':tool,width:d[1],row:0,col:0,x:p.x,y:p.y,name:selectedCatalog?.name||d[0],rating:d[2],sku:selectedCatalog?.sku||'',manufacturer:selectedCatalog?.manufacturer||'',unitPrice:selectedCatalog?.unitPrice??null,...deviceMeta(selectedCatalog)});selected=items.length-1;active=-1;redraw();showSelection()}
-place=function(r,c){if(selectedCatalog?.depthMm>cabinet.depthMm||selectedCatalog?.heightMm>pitch())return status('Апаратът не се побира в избраното табло.');active=-1;const n=items.length;oldPlace(r,c);if(items.length>n){Object.assign(items.at(-1),deviceMeta(selectedCatalog));redraw()}};
+place=function(r,c){
+ if(selectedCatalog?.depthMm>cabinet.depthMm||selectedCatalog?.heightMm>pitch()||
+    r*pitch()+heightOf(selectedCatalog||{})>usableH())return status('Апаратът не се побира в избраното табло.');
+ active=-1;
+ const n=items.length;
+ restoring=true;
+ try{oldPlace(r,c);}finally{restoring=false;}
+ if(items.length>n){Object.assign(items.at(-1),deviceMeta(selectedCatalog));redraw();}
+};
 const previousDemo=$('demo').onclick;$('demo').onclick=()=>{stopWire();connections=[];bars=[];draft=null;active=-1;mode='din';$('boardMode').value=mode;view='front';previousDemo();setView('front')};
 function data(){return {version:2,project:$('project').value,rows,modules,items,mode,cabinet,busbars:bars,connections,quote:window.PDGQuote?.settings()}}
 function download(name,obj){const url=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 $('save').onclick=()=>{try{C.validate(data());download('pdg-electric-cad.json',data())}catch(err){status('Неуспешен запис: '+err.message)}};
-$('load').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const d=C.validate(JSON.parse(await f.text()));rows=d.rows;modules=d.modules;items=d.items;bars=d.busbars;connections=d.connections||[];mode=d.mode;cabinet=d.cabinet||{sku:'',widthMm:600,heightMm:800,depthMm:260};window.PDGQuote?.load(d.quote);$('boardMode').value=mode;$('project').value=String(d.project||'Електрическо табло');$('rows').value=rows;$('modules').value=modules;active=-1;selected=-1;setView('front');showSelection();status('Проектът е отворен успешно.')}catch(err){status('Грешка при отваряне: '+err.message)}finally{e.target.value=''}};
-const previousBoard=$('newBoard').onclick;$('newBoard').onclick=()=>{if(mode==='din'&&Number($('modules').value)*18>usableW())return status('Избери по-широк корпус.');previousBoard()};
-$('autoArrange').onclick=()=>{if(bars.length)return status('Автоматичното подреждане е блокирано при начертани шини. Премести апаратите и точките заедно ръчно.');let r=0,c=0;const arranged=[];for(const source of items){if(c+source.width>modules){r++;c=0}if(r>=rows)return status('Недостатъчно място — проектът е запазен без промени.');const it={...source,row:r,col:c};delete it.x;delete it.y;arranged.push(it);c+=source.width}items=arranged;selected=-1;active=-1;redraw();showSelection();status('Апаратите са подредени по DIN редове.');};
-document.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;if(e.key==='Escape'){stopWire();cancel();}if(e.key==='Enter'&&editing)finish()});
-document.querySelectorAll('[data-type]').forEach(b=>b.addEventListener('click',()=>{stopWire();placing=true;redraw()}));window.PDGCad={arm(value=true){stopWire();placing=value;redraw()},project:data,cabinet:()=>({...cabinet}),chooseCabinet(p){if(!p||p.widthMm<200||p.heightMm<200||p.depthMm<50)return false;const nr=Number(p.specifications?.['Редове'])||rows,nm=Number(p.specifications?.['Брой модули на ред'])||modules,w=p.widthMm-Math.min(96,p.widthMm*.16),h=p.heightMm-125;if(mode==='din'&&(nm*18>w||items.some(it=>it.row>=nr||it.col+it.width>nm||heightOf(it)>Math.max(95,(p.heightMm-180)/nr)))||items.some(it=>{const pos=position(it);return it.depthMm>p.depthMm||(mode==='free'&&(pos.x+widthOf(it)>w||pos.y+heightOf(it)>h))})||bars.some(b=>b.points.some(q=>q.x>w||q.y>h||q.z>p.depthMm)))return status('Елементите не се побират в този корпус.'),false;cabinet={sku:p.sku,widthMm:p.widthMm,heightMm:p.heightMm,depthMm:p.depthMm};if(mode==='din'&&[12,18,24,36].includes(nm)&&nr>=1&&nr<=8){rows=nr;modules=nm;$('rows').value=rows;$('modules').value=modules}redraw();status('Избран корпус '+p.sku);return true}};$('drawing').setAttribute('tabindex','0');document.title='PDG Electric CAD | PDG Systems';document.querySelector('header b').textContent='PDG Electric CAD';redraw();
+function applyProject(d){
+ rows=d.rows;modules=d.modules;items=d.items;bars=d.busbars;connections=d.connections||[];
+ mode=d.mode;cabinet=d.cabinet||{...C.defaultCabinet};
+ window.PDGQuote?.load(d.quote);
+ $('boardMode').value=mode;$('project').value=String(d.project||'Електрическо табло');
+ $('rows').value=rows;$('modules').value=modules;
+ active=-1;selected=-1;placing=false;suppressClick=false;selectedCatalog=null;marked.clear();
+ setView('front');showSelection();
+}
+function rememberHistory(){
+ if(restoring)return;
+ const current=JSON.stringify(data());
+ if(lastSnapshot!==undefined&&current!==lastSnapshot){
+  undoStack.push(lastSnapshot);
+  if(undoStack.length>60)undoStack.shift();
+  redoStack.length=0;
+ }
+ lastSnapshot=current;
+ undoButton.disabled=!undoStack.length;
+ redoButton.disabled=!redoStack.length;
+}
+function changeHistory(from,to,message){
+ if(!from.length)return;
+ to.push(lastSnapshot);
+ lastSnapshot=from.pop();
+ restoring=true;
+ try{applyProject(JSON.parse(lastSnapshot));}finally{restoring=false;}
+ lastSnapshot=JSON.stringify(data());
+ rememberHistory();status(message);
+}
+$('load').onchange=async e=>{
+ try{
+  const f=e.target.files[0];if(!f)return;
+  applyProject(C.validate(JSON.parse(await f.text())));
+  status('Проектът е отворен успешно.');
+ }catch(err){status('Грешка при отваряне: '+err.message);}
+ finally{e.target.value='';}
+};
+$('newBoard').onclick=()=>{
+ const nextRows=Number($('rows').value),nextModules=Number($('modules').value);
+ try{
+  C.validate({...data(),rows:nextRows,modules:nextModules});
+  rows=nextRows;modules=nextModules;redraw();showSelection();
+ }catch(err){
+  $('rows').value=rows;$('modules').value=modules;status(err.message);
+ }
+};
+$('autoArrange').onclick=()=>{
+ if(bars.length||connections.length)return status('Автоматичното подреждане е достъпно преди окабеляване и чертане на шини.');
+ let x=0,y=0,rowHeight=0;
+ const free=mode==='free';
+ const arranged=items.map(item=>{
+  const width=free?widthOf(item):item.width;
+  const height=free?heightOf(item):1;
+  if(x&&x+width>(free?usableW():modules)){x=0;y+=rowHeight;rowHeight=0;}
+  const next={...item};
+  if(free){next.x=x;next.y=y;}
+  else{next.col=x;next.row=y;delete next.x;delete next.y;}
+  const gap=free?5:0;
+  x+=width+gap;rowHeight=Math.max(rowHeight,height+gap);
+  return next;
+ });
+ try{C.validate({...data(),items:arranged});}
+ catch(err){return status('Недостатъчно място за автоматично подреждане. '+err.message);}
+ items=arranged;selected=-1;active=-1;redraw();showSelection();
+ status(free?'Апаратите са подредени върху монтажната плоча.':'Апаратите са подредени по DIN редове.');
+};
+document.addEventListener('keydown',e=>{
+ if(e.target.closest?.('input,select,textarea,[contenteditable]'))return;
+ const key=e.key.toLowerCase();
+ if((e.ctrlKey||e.metaKey)&&['z','y'].includes(key)){
+  e.preventDefault();
+  (key==='y'||e.shiftKey?redoButton:undoButton).click();return;
+ }
+ if(e.key==='Escape')cancel();
+ if(e.key==='Enter'&&editing)finish();
+});
+document.querySelectorAll('[data-type]').forEach(b=>b.addEventListener('click',()=>{stopWire();placing=true;redraw()}));window.PDGCad={arm(value=true){stopWire();placing=value;redraw()},project:data,cabinet:()=>({...cabinet}),chooseCabinet(p){
+ if(!p)return false;
+ const nextCabinet={sku:p.sku,widthMm:p.widthMm,heightMm:p.heightMm,depthMm:p.depthMm};
+ const specRows=Number(p.specifications?.['Редове']),specModules=Number(p.specifications?.['Брой модули на ред']);
+ const nextRows=mode==='din'&&Number.isInteger(specRows)&&specRows>=1&&specRows<=8?specRows:rows;
+ const nextModules=mode==='din'&&[12,18,24,36].includes(specModules)?specModules:modules;
+ try{C.validate({...data(),cabinet:nextCabinet,rows:nextRows,modules:nextModules});}
+ catch(err){status('Елементите не се побират в този корпус. '+err.message);return false;}
+ cabinet=nextCabinet;rows=nextRows;modules=nextModules;
+ $('rows').value=rows;$('modules').value=modules;
+ redraw();status('Избран корпус '+p.sku);return true;
+ }};$('drawing').setAttribute('tabindex','0');document.title='PDG Electric CAD | PDG Systems';document.querySelector('header b').textContent='PDG Electric CAD';redraw();
 })();
