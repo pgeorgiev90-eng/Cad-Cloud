@@ -1,4 +1,4 @@
-import { equipmentFromDwg } from './electrical-dwg-data.js';
+import { equipmentFromDwg } from './electrical-dwg-data.js?v=wire-dwg1';
 const library = 'https://cdn.jsdelivr.net/npm/@mlightcad/libredwg-web@0.8.4';
 
 self.onmessage = async ({data}) => {

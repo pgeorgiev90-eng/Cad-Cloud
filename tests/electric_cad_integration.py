@@ -14,8 +14,9 @@ def request(c,path,payload=None,csrf=None):
 def login(email,password):
  c=client();_,s=request(c,'api/account-draft.php?action=session');assert request(c,'api/account-draft.php?action=login',{'email':email,'password':password},s['csrf'])[0]==200
  return c,request(c,'api/account-draft.php?action=session')[1]['csrf']
-a,csrf=login('new-admin@example.test','Longer-test-password-123');v=client();c,customer_csrf=login('new-customer@example.test','Customer-long-password-123')
-assert request(v,'api/admin-electric.php')[0]==401
+a,csrf=login('new-admin@example.test','Longer-test-password-123');guest=client();c,customer_csrf=login('new-customer@example.test','Customer-long-password-123')
+v=c
+assert request(guest,'api/admin-electric.php')[0]==401
 assert request(c,'api/admin-electric.php')[0]==403
 assert request(c,'api/admin-electric.php',{'action':'labour','id':1,'price':'1'},customer_csrf)[0]==403
 status,data=request(v,'api/electric-catalog.php?q=BM617116');assert status==200 and data['labour_included'] is False

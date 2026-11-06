@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/customer-pricing.php';
 function electric_bootstrap(PDO $db): void {
  $db->exec(file_get_contents(dirname(__DIR__).'/database/electric-cad-schema.sql'));
  $file=dirname(__DIR__).'/database/electrical-catalog.json';if(!is_file($file))throw new RuntimeException('catalog');
@@ -21,10 +22,37 @@ function electric_products(PDO $db,string $query='',bool $admin=false): array {
  $q=$db->prepare('SELECT sku,product_json,price_cents,active FROM pdg_electric_products WHERE '.($admin?'1=1':'active=1').' AND (sku LIKE ? OR product_json LIKE ?) ORDER BY sku LIMIT 2000');$q->execute(['%'.$query.'%','%'.$query.'%']);$out=[];foreach($q as $row){$p=json_decode($row['product_json'],true,512,JSON_THROW_ON_ERROR);$c=electric_unit_cents($row['sku'],$row['price_cents']);$p['unitPrice']=$c===null?null:$c/100;$p['priceSource']=$row['price_cents']!==null?'admin':($c===null?null:'schrack_2026_06');$p['active']=(bool)$row['active'];$out[]=$p;}return $out;
 }
 function electric_money($v): ?int {if($v===null||$v==='')return null;if(!is_string($v)||!preg_match('/^(?:0|[1-9][0-9]{0,7})(?:\.[0-9]{1,2})?$/D',$v))throw new InvalidArgumentException('price');return (int)round((float)$v*100);}
-function electric_materials(PDO $db,array $input): array {
+function electric_shop_key(string $sku): string {
+ return rtrim(strtoupper(trim($sku)), '-');
+}
+function electric_shop_parts(PDO $db): array {
+ $parts=[];
+ $rows=$db->query("SELECT code,name,category,price FROM products WHERE active=1 ORDER BY id");
+ foreach($rows as $row){
+  if(!preg_match('~^Електроапаратура(?:\s*/|$)~u',$row['category']))continue;
+  $parts[electric_shop_key($row['code'])]??=$row;
+ }
+ return $parts;
+}
+function electric_materials(PDO $db,array $input,int $discount=0): array {
  $parts=$input['parts']??null;$bars=$input['busbars']??[];if(!is_array($parts)||count($parts)>500||!is_array($bars)||count($bars)>300)throw new InvalidArgumentException('parts');$lines=[];$total=0;$missing=0;$enclosures=0;
  $q=$db->prepare('SELECT product_json,price_cents FROM pdg_electric_products WHERE sku=? AND active=1');
- foreach($parts as $part){if(!is_array($part)||!is_string($part['sku']??null)||!is_int($part['quantity']??null)||$part['quantity']<1||$part['quantity']>500)throw new InvalidArgumentException('part');$q->execute([$part['sku']]);$row=$q->fetch();if(!$row)throw new InvalidArgumentException('unknown_product');$p=json_decode($row['product_json'],true);if(($p['type']??'')==='ENCLOSURE')$enclosures+=$part['quantity'];$unit=electric_unit_cents($part['sku'],$row['price_cents']);$amount=$unit===null?null:$unit*$part['quantity'];if($amount===null)$missing++;else $total+=$amount;$lines[]=['sku'=>$part['sku'],'name'=>$p['name'],'quantity'=>$part['quantity'],'unit'=>'бр.','unit_cents'=>$unit,'line_cents'=>$amount];}
+ $shop=electric_shop_parts($db);
+ foreach($parts as $part){
+  if(!is_array($part)||!is_string($part['sku']??null)||!is_int($part['quantity']??null)||$part['quantity']<1||$part['quantity']>500)throw new InvalidArgumentException('part');
+  $q->execute([$part['sku']]);
+  $row=$q->fetch();
+  $store=$shop[electric_shop_key($part['sku'])]??null;
+  if(!$row&&!$store)throw new InvalidArgumentException('unknown_product');
+  $p=$row?json_decode($row['product_json'],true):null;
+  $isEnclosure=$p?($p['type']??'')==='ENCLOSURE':str_contains($store['category'],'Табла и корпуси');
+  if($isEnclosure)$enclosures+=$part['quantity'];
+  $unit=$store?((float)$store['price']>0?(int)round((float)$store['price']*100):null):electric_unit_cents($part['sku'],$row['price_cents']);
+  if($store&&$unit!==null)$unit=pdg_discounted_cents($unit,$discount);
+  $amount=$unit===null?null:$unit*$part['quantity'];
+  if($amount===null)$missing++;else $total+=$amount;
+  $lines[]=['sku'=>$part['sku'],'name'=>$p['name']??$store['name'],'quantity'=>$part['quantity'],'unit'=>'бр.','unit_cents'=>$unit,'line_cents'=>$amount];
+ }
  $rates=electric_rates($db);
  foreach($bars as $bar){$width=$bar['width']??null;$thickness=$bar['thickness']??null;$points=$bar['points']??null;if(!is_numeric($width)||!is_numeric($thickness)||$width<2||$width>100||$thickness<1||$thickness>20||!is_array($points)||count($points)<2||count($points)>500)throw new InvalidArgumentException('bar');$length=0;$prev=null;foreach($points as $p){foreach(['x'=>1600,'y'=>2400,'z'=>300] as $key=>$max)if(!isset($p[$key])||!is_numeric($p[$key])||!is_finite((float)$p[$key])||$p[$key]<0||$p[$key]>$max)throw new InvalidArgumentException('point');if($prev!==null)$length+=sqrt(($p['x']-$prev['x'])**2+($p['y']-$prev['y'])**2+($p['z']-$prev['z'])**2);$prev=$p;}$metres=round($length,3)/1000;$key=sprintf('%.2fx%.2f',(float)$width,(float)$thickness);$price=isset($rates[$key])?(int)$rates[$key]['price_per_m_cents']:null;$amount=$price===null?null:(int)round($metres*$price);if($amount===null)$missing++;else$total+=$amount;$lines[]=['sku'=>$key,'name'=>'Медна шина '.$width.' × '.$thickness.' mm','quantity'=>$metres,'unit'=>'m','unit_cents'=>$price,'line_cents'=>$amount];}
  if($enclosures!==1||count($lines)===0)throw new InvalidArgumentException('empty');return ['lines'=>$lines,'materials_cents'=>$total,'missing_prices'=>$missing,'currency'=>'EUR','labour_included'=>false,'vat_percent'=>20,'vat_cents'=>(int)round($total*.2),'total_cents'=>$total+(int)round($total*.2)];

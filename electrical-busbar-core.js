@@ -1,21 +1,63 @@
 (function(root){
 'use strict';
 const finite=(n,min,max)=>typeof n==='number'&&Number.isFinite(n)&&n>=min&&n<=max;
+const schematicPoint=p=>p&&finite(p.x,0,100000)&&finite(p.y,0,100000);
 function point(p){return p&&finite(p.x,0,1600)&&finite(p.y,0,2400)&&finite(p.z,0,300)}
+const defaultCabinet={sku:'',widthMm:600,heightMm:800,depthMm:260};
+const widthOf=item=>item.widthMm??item.width*18;
+const heightOf=item=>item.heightMm??83;
+function layout(cabinet,rows,modules){
+ const width=cabinet.widthMm-Math.min(96,cabinet.widthMm*.16);
+ return {width,height:cabinet.heightMm-125,pitch:Math.max(95,(cabinet.heightMm-180)/rows),inset:Math.max(0,(width-modules*18)/2)};
+}
+function position(item,mode,geometry){
+ return mode==='free'&&item.x!==undefined?{x:item.x,y:item.y}:
+  {x:geometry.inset+item.col*18,y:item.row*geometry.pitch};
+}
 function validate(data){
  if(!data||!Array.isArray(data.items)||data.items.length>500||!Number.isInteger(data.rows)||data.rows<1||data.rows>8||![12,18,24,36].includes(data.modules))throw Error('Невалидни размери или апарати');
  const d=JSON.parse(JSON.stringify(data));d.mode=d.mode==='free'?'free':'din';d.busbars=d.busbars||[];
  if(!Array.isArray(d.busbars)||d.busbars.length>300)throw Error('Невалидни шини');
  if(d.cabinet&&(!finite(d.cabinet.widthMm,200,1600)||!finite(d.cabinet.heightMm,200,2400)||!finite(d.cabinet.depthMm,50,1000)||typeof d.cabinet.sku!=='string'))throw Error('Невалиден корпус');
- d.items.forEach(it=>{if(!['MCB','RCD','RCBO','SPD','MAIN','CONTACT','METER','BLANK','CAT'].includes(it.type)||!finite(it.width,1,36)||!Number.isInteger(it.row)||!Number.isInteger(it.col)||it.row<0||it.row>=d.rows||it.col<0||it.col+it.width>d.modules)throw Error('Апарат извън таблото');if(it.x!==undefined&&(!finite(it.x,0,1600)||!finite(it.y,0,2400)))throw Error('Невалидна монтажна позиция');if(it.unitPrice!==undefined&&it.unitPrice!==null&&!finite(it.unitPrice,0,1e9))throw Error('Невалидна цена');it.name=String(it.name||'Апарат').slice(0,200);it.rating=String(it.rating||'').slice(0,100)});
+ const cabinet=d.cabinet||defaultCabinet, geometry=layout(cabinet,d.rows,d.modules);
+ if(d.mode==='din'&&d.modules*18>geometry.width)throw Error('DIN редовете са по-широки от монтажната плоча.');
+ if(d.dinRails!==undefined&&(!Array.isArray(d.dinRails)||d.dinRails.length>30||d.dinRails.some(rail=>
+     !rail||!finite(rail.x,0,geometry.width)||!finite(rail.y,0,geometry.height-12)||
+     !finite(rail.width,1,geometry.width-rail.x))))throw Error('DIN шина извън монтажната плоча.');
+ if(d.schematicNotes!==undefined&&(!Array.isArray(d.schematicNotes)||d.schematicNotes.length>200||
+    d.schematicNotes.some(n=>!schematicPoint(n)||typeof n.text!=='string'||n.text.length>120))){
+  throw Error('Невалидна бележка в еднолинейната схема.');
+ }
+ const rectangles=[];
+ d.items.forEach(it=>{const freePosition=d.mode==='free'&&it.x!==undefined;if(!['MCB','RCD','RCBO','SPD','MAIN','CONTACT','METER','BLANK','CAT'].includes(it.type)||!finite(it.width,1,freePosition?Math.ceil(1600/18):36)||!Number.isInteger(it.row)||!Number.isInteger(it.col)||it.row<0||it.row>=d.rows||it.col<0||(!freePosition&&it.col+it.width>d.modules))throw Error('Апарат извън таблото');if(it.x!==undefined&&(!finite(it.x,0,1600)||!finite(it.y,0,2400)))throw Error('Невалидна монтажна позиция');if(it.unitPrice!==undefined&&it.unitPrice!==null&&!finite(it.unitPrice,0,1e9))throw Error('Невалидна цена');it.name=String(it.name||'Апарат').slice(0,200);it.rating=String(it.rating||'').slice(0,100);
+  if(it.schematic!==undefined&&(!schematicPoint(it.schematic)||it.schematic.y<100)){
+   throw Error('Невалидна позиция в еднолинейната схема.');
+  }
+  const {x,y}=position(it,d.mode,geometry),width=widthOf(it),height=heightOf(it);
+  if(!finite(width,.1,1600)||!finite(height,.1,2400)||
+     (it.depthMm!==undefined&&!finite(it.depthMm,.1,cabinet.depthMm))||
+     x+width>geometry.width||y+height>geometry.height||
+     (d.mode==='din'&&height>geometry.pitch))throw Error('Апарат извън монтажната плоча: '+it.name+'.');
+  if(d.mode==='free'&&rectangles.some(r=>x<r.x+r.width&&x+width>r.x&&y<r.y+r.height&&y+height>r.y)){
+   throw Error('Припокриващи се апарати: '+it.name+'.');
+  }
+  rectangles.push({x,y,width,height});
+ });
  for(let i=0;i<d.items.length;i++)for(let j=0;j<i;j++){const a=d.items[i],b=d.items[j];if(d.mode==='din'&&a.row===b.row&&a.col<b.col+b.width&&b.col<a.col+a.width)throw Error('Припокриващи се апарати')}
- d.busbars.forEach(b=>{if(!Array.isArray(b.points)||b.points.length<2||b.points.length>500||!b.points.every(point)||!finite(b.width,2,100)||!finite(b.thickness,1,20)||!/^#[0-9a-f]{6}$/i.test(b.color))throw Error('Невалидна геометрия на шина');b.holes=b.holes||[];if(!Array.isArray(b.holes)||!b.holes.every(h=>Number.isInteger(h.index)&&h.index>=0&&h.index<b.points.length&&finite(h.diameter,2,30)))throw Error('Невалиден отвор')});
+ d.busbars.forEach(b=>{if(!Array.isArray(b.points)||b.points.length<2||b.points.length>500||!b.points.every(p=>point(p)&&p.x<=geometry.width&&p.y<=geometry.height&&p.z<=cabinet.depthMm)||!finite(b.width,2,100)||!finite(b.thickness,1,20)||!/^#[0-9a-f]{6}$/i.test(b.color))throw Error('Невалидна геометрия на шина');b.holes=b.holes||[];if(!Array.isArray(b.holes)||!b.holes.every(h=>Number.isInteger(h.index)&&h.index>=0&&h.index<b.points.length&&finite(h.diameter,2,30)))throw Error('Невалиден отвор')});
  const wires=typeof module!=="undefined"?require("./electrical-connections.js"):root.PDGConnections;
- wires.validate(d.items,d.connections);
+ wires.validate(d.items,d.connections,d.busbars);
+ if(d.connections?.some(w=>[['schematicBends',24],['schematicGaps',300]].some(([key,max])=>
+     w[key]!==undefined&&(!Array.isArray(w[key])||w[key].length>max||!w[key].every(schematicPoint))))){
+  throw Error('Невалидно трасе в еднолинейната схема.');
+ }
+ if(d.connections?.some(wire=>wire.channelY!==undefined&&(wire.channelY<6||wire.channelY>geometry.height-6))){
+  throw Error('Каналът на проводника е извън монтажната плоча.');
+ }
  return d;
 }
 function project(p,view){return view==='side'?{x:40+p.z*2,y:100+p.y*1.5}:view==='3d'?{x:55+p.x*1.25+p.z*.8,y:240+p.y*1.1-p.x*.22-p.z*.65}:{x:50+p.x,y:120+p.y}}
-function snap(p,targets,step=5,radius=8){let best=null,dist=radius;for(const t of targets){const n=Math.hypot(t.x-p.x,t.y-p.y);if(n<dist){dist=n;best=t}}return best?{...best,z:p.z}:{x:Math.max(0,Math.round(p.x/step)*step),y:Math.max(0,Math.round(p.y/step)*step),z:p.z}}
+function snap(p,targets,step=5,radius=8){let best=null,dist=radius;for(const t of targets){const n=Math.hypot(t.x-p.x,t.y-p.y);if(n<dist){dist=n;best=t}}return best?{x:best.x,y:best.y,z:p.z}:{x:Math.max(0,Math.round(p.x/step)*step),y:Math.max(0,Math.round(p.y/step)*step),z:p.z}}
 function length(b){return b.points.slice(1).reduce((s,p,i)=>s+Math.hypot(p.x-b.points[i].x,p.y-b.points[i].y,p.z-b.points[i].z),0)}
-const api={validate,project,snap,length};if(typeof module!=='undefined')module.exports=api;root.PDGBusbar=api;
+const api={validate,project,snap,length,layout,position,widthOf,heightOf,defaultCabinet};if(typeof module!=='undefined')module.exports=api;root.PDGBusbar=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

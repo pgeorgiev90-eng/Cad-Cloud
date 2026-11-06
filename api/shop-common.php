@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/customer-pricing.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -41,7 +42,18 @@ function shop_cents($price): ?int {
     $cents=(int)$m[1]*100+(int)str_pad($m[2]??'',2,'0');
     return $cents>0 ? $cents : null;
 }
-function shop_quote(PDO $db): array {
+function shop_customer_cart(): void {
+    $id=(int)$_SESSION['user']['id'];
+    if (($_SESSION['cart_account_id']??null)!==$id) {
+        unset($_SESSION['cart'],$_SESSION['checkout_key'],$_SESSION['last_order'],
+            $_SESSION['electric_request_key'],$_SESSION['electric_submitted'],$_SESSION['electric_last_request']);
+        $_SESSION['cart_account_id']=$id;
+    }
+    $_SESSION['cart']??=[];
+    $_SESSION['csrf']??=bin2hex(random_bytes(32));
+    $_SESSION['checkout_key']??=bin2hex(random_bytes(32));
+}
+function shop_quote(PDO $db, array $account): array {
     $items=[]; $subtotal=0; $unavailable=false;
     $ids=array_keys($_SESSION['cart']);
     if ($ids) {
@@ -51,6 +63,7 @@ function shop_quote(PDO $db): array {
         foreach ($_SESSION['cart'] as $id=>$quantity) {
             $p=$rows[$id]??null;
             $unit=$p && (int)$p['active']===1 ? shop_cents($p['price']) : null;
+            $unit=$unit===null?null:pdg_discounted_cents($unit,$account['discount_bp']);
             $line=$unit===null ? 0 : $unit*$quantity;
             if ($unit===null) $unavailable=true;
             $items[]=['id'=>(int)$id,'code'=>$p['code']??'', 'name'=>$p['name']??'Продуктът вече не е достъпен', 'quantity'=>$quantity,'unit_cents'=>$unit,'line_cents'=>$line,'available'=>$unit!==null];

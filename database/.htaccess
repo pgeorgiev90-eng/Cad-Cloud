@@ -1,0 +1,3 @@
+<FilesMatch "(?i)^(import-catalog\.sql|schrack-shop-catalog\.json|electrical-reference-prices\.json)$">
+    Require all denied
+</FilesMatch>

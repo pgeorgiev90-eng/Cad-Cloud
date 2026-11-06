@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/customer-pricing.php';
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store');header('X-Content-Type-Options: nosniff');
 function result(int $status,array $data): void {http_response_code($status);echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_INVALID_UTF8_SUBSTITUTE);exit;}
 $id=filter_input(INPUT_GET,'id',FILTER_VALIDATE_INT);
@@ -19,5 +20,7 @@ try{
  $product['description']='';$product['imageCaption']='';
  foreach($fields as $f){if(mb_strtolower(trim($f['label']),'UTF-8')==='описание')$product['description']=$f['value'];if(mb_strtolower(trim($f['label']),'UTF-8')==='бележка за снимката')$product['imageCaption']=$f['value'];}
  $fields=array_values(array_filter($fields,fn($f)=>!in_array(mb_strtolower(trim($f['label']),'UTF-8'),['описание','бележка за снимката'],true)));
- result(200,['product'=>$product,'fields'=>$fields]);
+ $account=pdg_pricing_account($db);
+ $product['price']=pdg_product_price($product['price'],$account);
+ result(200,['product'=>$product,'fields'=>$fields,'prices_visible'=>$account!==null]);
 }catch(Throwable $e){result(503,['error'=>'service_unavailable']);}

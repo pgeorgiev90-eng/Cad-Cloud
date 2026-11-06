@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/shop-common.php';
-shop_session();
 try {
-    $input=shop_input();
     $db=shop_db();
+    $account=pdg_pricing_account($db,true);
+    if($account===null)shop_answer(401,['error'=>'authentication_required']);
+    shop_customer_cart();
+    $input=shop_input();
     $key=$input['checkout_key']??'';
     if (!is_string($key)||!preg_match('/^[a-f0-9]{64}$/D',$key)) shop_answer(422,['error'=>'invalid_input']);
     // A retry of the same successful submission returns the same receipt.
@@ -31,7 +33,7 @@ try {
     $ids=array_keys($_SESSION['cart']);
     if (!$ids) {$db->rollBack();shop_answer(422,['error'=>'empty_cart']);}
     $q=$db->prepare('SELECT id FROM products WHERE id IN ('.implode(',',array_fill(0,count($ids),'?')).') FOR UPDATE');$q->execute($ids);$q->fetchAll();
-    $quote=shop_quote($db);
+    $quote=shop_quote($db,$account);
     if (!$quote['can_checkout']||!is_string($input['revision']??null)||!hash_equals($quote['revision'],$input['revision'])) {$db->rollBack();shop_answer(409,['error'=>'cart_changed']);}
     $number='PDG-'.gmdate('Ymd').'-'.strtoupper(bin2hex(random_bytes(5)));
     $request=hash('sha256',session_id().':'.$key);

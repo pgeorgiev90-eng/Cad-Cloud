@@ -1,11 +1,13 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/shop-common.php';
-shop_session();
 try {
     $db=shop_db();
+    $account=pdg_pricing_account($db,true);
+    if($account===null)shop_answer(401,['error'=>'authentication_required']);
+    shop_customer_cart();
     $db->exec(file_get_contents(dirname(__DIR__).'/database/orders-schema.sql'));
-    if ($_SERVER['REQUEST_METHOD']==='GET') shop_answer(200,shop_quote($db));
+    if ($_SERVER['REQUEST_METHOD']==='GET') shop_answer(200,shop_quote($db,$account));
     $input=shop_input();
     $action=$input['action']??'';
     if ($action==='clear') {
@@ -24,5 +26,5 @@ try {
         }
     } else shop_answer(422,['error'=>'invalid_action']);
     $_SESSION['checkout_key']=bin2hex(random_bytes(32));
-    shop_answer(200,shop_quote($db));
+    shop_answer(200,shop_quote($db,$account));
 } catch (Throwable $e) { shop_answer(503,['error'=>'shop_unavailable']); }

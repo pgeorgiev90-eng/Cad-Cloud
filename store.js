@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const money = cents => (Number(cents) / 100).toLocaleString('bg-BG', {style:'currency', currency:'EUR'});
-  const errors = {shop_unavailable:'Магазинът временно не е достъпен.', product_unavailable:'Този продукт е само по запитване или вече не се предлага.', invalid_quantity:'Въведете количество от 1 до 999.', cart_limit:'Достигнат е лимитът на количката (50 продукта, до 999 броя).', invalid_request:'Сесията е обновена. Презаредете страницата.', cart_changed:'Количката или цените са променени. Прегледайте обновените суми и изпратете отново.', invalid_customer:'Проверете данните за контакт и адреса.', try_later:'Достигнат е лимитът за поръчки. Опитайте по-късно.', checkout_unavailable:'Поръчката не може да бъде потвърдена. Опитайте отново със същата количка.', empty_cart:'Количката е празна.'};
+  const errors = {authentication_required:'Влезте в акаунта си, за да използвате количката.',shop_unavailable:'Магазинът временно не е достъпен.', product_unavailable:'Този продукт е само по запитване или вече не се предлага.', invalid_quantity:'Въведете количество от 1 до 999.', cart_limit:'Достигнат е лимитът на количката (50 продукта, до 999 броя).', invalid_request:'Сесията е обновена. Презаредете страницата.', cart_changed:'Количката или цените са променени. Прегледайте обновените суми и изпратете отново.', invalid_customer:'Проверете данните за контакт и адреса.', try_later:'Достигнат е лимитът за поръчки. Опитайте по-късно.', checkout_unavailable:'Поръчката не може да бъде потвърдена. Опитайте отново със същата количка.', empty_cart:'Количката е празна.'};
   let cart = null, queue = Promise.resolve();
   const node = (tag, text, cls) => {const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
   const notice = node('div', '', 'store-toast');
@@ -75,5 +75,12 @@
       submitting=false;button.disabled=!cart?.can_checkout;button.textContent='Изпрати поръчка за потвърждение';root.querySelectorAll('button,input').forEach(e=>e.disabled=false);
     }
   });
-  refresh().then(render).catch(()=>{if(root){root.textContent='Количката временно не е достъпна.';form.hidden=true;}tell('Не можем да заредим количката. Презаредете страницата.');});
+  refresh().then(render).catch(error=>{
+    if(!root)return;
+    if(form)form.hidden=true;
+    if(error.message==='authentication_required'){
+      const login=node('a','Влезте, за да отворите количката');
+      login.href='auth.html?next=cart.html';root.replaceChildren(login);
+    } else root.textContent='Количката временно не е достъпна.';
+  });
 })();

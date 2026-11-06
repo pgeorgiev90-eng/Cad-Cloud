@@ -5,7 +5,19 @@
   let products=[],generation=0,ready=false,electricalSpec=null,specSequence=0,restoredProduct='';
   const field=id=>$('offer-'+id);
   function settings(){const data={};for(const id of ids)data[id]=field(id).value;return data;}
-  function restore(data){if(!data||typeof data!=='object')return;for(const id of ids)if(typeof data[id]==='string')field(id).value=data[id].slice(0,500);restoredProduct=typeof data.inverter==='string'?data.inverter:'';if(products.length&&restoredProduct){field('inverter').value=restoredProduct;loadElectrical(false);}else{electricalSpec=null;specSequence++;field('inverterName').readOnly=false;}invalidate();}
+  function restore(data){
+    if(!data||typeof data!=='object')return;
+    for(const id of ids)if(typeof data[id]==='string')field(id).value=data[id].slice(0,500);
+    restoredProduct=typeof data.inverter==='string'?data.inverter:'';
+    if(restoredProduct)field('inverterPrice').value='';
+    if(products.length)loadElectrical(false);
+    else{
+      electricalSpec=null;specSequence++;
+      field('inverterName').readOnly=field('inverterPrice').readOnly=Boolean(restoredProduct);
+      field('inverterKw').readOnly=false;
+    }
+    invalidate();
+  }
   window.PDGSolarOffer={settings,restore};
   function invalidate(){generation++;ready=false;$('offer-print').disabled=$('offer-download').disabled=true;if($('solarOfferDialog').open)$('offer-progress').textContent='Проектът е променен. Затворете офертата и я генерирайте отново.';previewStrings();}
   function previewStrings(){
@@ -19,22 +31,29 @@
     if(!plan.rows.length&&!plan.errors.length)box.append(text('p','Поставете панели с попълнени Voc и температурен коефициент.'));
     box.append(text('p','Ограничение по максимално напрежение. Броят MPPT/входове, токовете и минималното работно напрежение изискват отделна проверка.'));
   }
+  const catalogPrice=p=>p?.price!==null&&p?.price!==undefined&&Number(p.price)>=0?String(p.price):'';
+  const priceLabel=p=>catalogPrice(p)?Number(p.price).toLocaleString('bg-BG',{style:'currency',currency:'EUR'})+' без ДДС':'Цена по запитване';
   async function loadElectrical(setValues=true){
     const p=products.find(p=>String(p.id)===field('inverter').value),sequence=++specSequence;electricalSpec=null;
-    field('inverterName').readOnly=Boolean(p);
-    if(!p){field('inverterKw').readOnly=false;invalidate();return;}
+    field('inverterName').readOnly=field('inverterPrice').readOnly=Boolean(p);
+    if(!p){field('inverterKw').readOnly=false;if(setValues)field('inverterPrice').value='';invalidate();return;}
     field('inverterName').value=p.name;
+    field('inverterPrice').value=catalogPrice(p);
     const wasAutoPower=field('inverterKw').readOnly;
-    if(setValues){field('inverterPrice').value=p.price??'';field('inverterKw').value='';field('inverterKw').readOnly=false;}
+    if(setValues){field('inverterKw').value='';field('inverterKw').readOnly=false;}
     $('offer-inverter-status').textContent='Зареждане на характеристиките на '+p.name+'…';invalidate();
     try{
       const r=await fetch('api/product-details.php?id='+encodeURIComponent(p.id),{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();
       if(sequence!==specSequence||String(p.id)!==field('inverter').value)return;
+      if(!data.product||String(data.product.id)!==String(p.id))throw Error();
+      p.price=data.product.price;
+      field('inverterPrice').value=catalogPrice(p);
+      field('inverter').selectedOptions[0].textContent=p.brand+' · '+p.name+' · '+priceLabel(p);
       electricalSpec=core.electrical(data.fields);electricalSpec.productId=Number(p.id);
       if(electricalSpec.acPowerKw){field('inverterKw').value=String(electricalSpec.acPowerKw);field('inverterKw').readOnly=true;}
       else{field('inverterKw').readOnly=false;if(wasAutoPower)field('inverterKw').value='';}
       $('offer-inverter-status').textContent=electricalSpec.errors.length?electricalSpec.errors.join(' '):'Фазността, DC лимитът'+(electricalSpec.acPowerKw?' и AC мощността са заредени':' са прочетени')+' от техническите спецификации на артикула.';
-    }catch(e){if(sequence!==specSequence)return;electricalSpec={errors:['Характеристиките на инвертора не могат да се заредят.']};$('offer-inverter-status').textContent=electricalSpec.errors[0];}
+    }catch(e){if(sequence!==specSequence)return;field('inverterPrice').value='';electricalSpec={errors:['Характеристиките на инвертора не могат да се заредят.']};$('offer-inverter-status').textContent=electricalSpec.errors[0];}
     invalidate();
   }
   window.addEventListener('pdg-solar-change',invalidate);
@@ -44,10 +63,10 @@
   $('offer-inverter').onchange=()=>loadElectrical(true);
   fetch('api/products.php',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(d=>{
     products=d.products.filter(p=>/инвертор|inverter/i.test(p.category));
-    for(const p of products){const o=new Option(p.brand+' · '+p.name,p.id);$('offer-inverter').add(o);}
+    for(const p of products){const o=new Option(p.brand+' · '+p.name+' · '+priceLabel(p),p.id);$('offer-inverter').add(o);}
     $('offer-inverter-status').textContent=products.length+' инвертора от магазина. Може да въведете и друг модел.';
     if(restoredProduct){field('inverter').value=restoredProduct;loadElectrical(false);}
-  }).catch(()=>{$('offer-inverter-status').textContent='Каталогът временно не се зарежда. Може да въведете модела и цената ръчно.';});
+  }).catch(()=>{loadElectrical(false);$('offer-inverter-status').textContent='Каталогът временно не се зарежда. Може да въведете модела и цената ръчно.';});
   const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;};
   const number=(v,d=1)=>Number(v).toLocaleString('bg-BG',{maximumFractionDigits:d});
   const money=cents=>(cents/100).toLocaleString('bg-BG',{style:'currency',currency:'EUR'});
