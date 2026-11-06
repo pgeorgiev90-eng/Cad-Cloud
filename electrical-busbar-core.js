@@ -39,6 +39,9 @@ function validate(data){
  d.busbars.forEach(b=>{if(!Array.isArray(b.points)||b.points.length<2||b.points.length>500||!b.points.every(p=>point(p)&&p.x<=geometry.width&&p.y<=geometry.height&&p.z<=cabinet.depthMm)||!finite(b.width,2,100)||!finite(b.thickness,1,20)||!/^#[0-9a-f]{6}$/i.test(b.color))throw Error('Невалидна геометрия на шина');b.holes=b.holes||[];if(!Array.isArray(b.holes)||!b.holes.every(h=>Number.isInteger(h.index)&&h.index>=0&&h.index<b.points.length&&finite(h.diameter,2,30)))throw Error('Невалиден отвор')});
  const wires=typeof module!=="undefined"?require("./electrical-connections.js"):root.PDGConnections;
  wires.validate(d.items,d.connections,d.busbars);
+ if(d.connections?.some(wire=>wire.channelY!==undefined&&(wire.channelY<6||wire.channelY>geometry.height-6))){
+  throw Error('Каналът на проводника е извън монтажната плоча.');
+ }
  return d;
 }
 function project(p,view){return view==='side'?{x:40+p.z*2,y:100+p.y*1.5}:view==='3d'?{x:55+p.x*1.25+p.z*.8,y:240+p.y*1.1-p.x*.22-p.z*.65}:{x:50+p.x,y:120+p.y}}

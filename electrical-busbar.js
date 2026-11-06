@@ -3,6 +3,7 @@
 'use strict';
 const C=PDGBusbar, W=PDGConnections, oldSelection=showSelection,oldPlace=place;
 let connections=[],dinRails=[], wiring=false, wireStart=null, wireBends=[];
+let channelY, branchDraft, branching=false, selectedWire=null, zoom=1;
 const marked=new Set();
 const undoStack=[],redoStack=[];
 let lastSnapshot,restoring=false;
@@ -52,6 +53,26 @@ try{const t=JSON.parse(localStorage.getItem('pdg_busbar_module_v1')||'null');if(
 const toolbar=document.querySelector('.toolbar');
 const undoButton=button(toolbar,'↶ Отмени',()=>changeHistory(undoStack,redoStack,'Операцията е отменена.'),'cadUndo');
 const redoButton=button(toolbar,'↷ Повтори',()=>changeHistory(redoStack,undoStack,'Операцията е повторена.'),'cadRedo');
+button(toolbar,'− Намали',()=>setZoom(zoom/1.25),'cadZoomOut');
+const zoomReset=button(toolbar,'Зуум 100%',()=>setZoom(1),'cadZoomReset');
+button(toolbar,'+ Увеличи',()=>setZoom(zoom*1.25),'cadZoomIn');
+function resizeDrawing(){
+ const svg=$('drawing');
+ svg.style.width='';svg.style.height='';svg.style.maxWidth='';svg.style.maxHeight='';svg.style.minWidth='';
+ if(zoom===1)return;
+ const {width,height}=svg.getBoundingClientRect();
+ svg.style.maxWidth='none';svg.style.maxHeight='none';svg.style.minWidth='0';
+ svg.style.width=width*zoom+'px';svg.style.height=height*zoom+'px';
+}
+function setZoom(value){
+ zoom=Math.max(.5,Math.min(3,value));
+ zoomReset.textContent='Зуум '+Math.round(zoom*100)+'%';
+ resizeDrawing();
+}
+$('drawing').closest('.canvas').addEventListener('wheel',event=>{
+ if(!event.ctrlKey&&!event.metaKey)return;
+ event.preventDefault();setZoom(zoom*(event.deltaY<0?1.25:1/1.25));
+},{passive:false});
 button(toolbar,'Страничен изглед',()=>setView('side'),'sideView');button(toolbar,'3D изглед',()=>setView('3d'),'threeView');
 $('boardMode').onchange=()=>{
  const next=$('boardMode').value;
@@ -68,17 +89,17 @@ function finish(){if(draft?.points.length>=2){bars.push(draft);active=bars.lengt
 function cancel(){stopWire();draft=null;editing=false;moving=null;redraw();status('Готов за работа.')}
 function params(){const phase=newBarPhase.value||undefined;const b={id:crypto.randomUUID(),phase,width:Number($('barWidth').value),thickness:Number($('barThickness').value),color:phase?W.phases[phase].color:$('barColor').value,points:[{x:0,y:0,z:Number($('barDepth').value)},{x:5,y:0,z:Number($('barDepth').value)}],holes:[]};C.validate({rows,modules,items:[],busbars:[b]});return b}
 function append(p){try{if(p.x>usableW()||p.y>usableH()||p.z>Math.min(300,cabinet.depthMm))throw Error('Точката е извън монтажната плоча или дълбочината на корпуса.');if(editing==='module'){const b=JSON.parse(JSON.stringify(moduleTemplate)),origin=b.points[0];b.id=crypto.randomUUID();b.points=b.points.map(q=>({x:q.x-origin.x+p.x,y:q.y-origin.y+p.y,z:q.z-origin.z+p.z}));C.validate({rows,modules,items:[],busbars:[b]});if(b.points.some(q=>q.x>usableW()||q.y>usableH()||q.z>cabinet.depthMm))throw Error('Модулът не се побира на тази позиция.');bars.push(b);active=bars.length-1;editing=false;showSelection()}else if(!draft){draft=params();draft.points=[p]}else if(C.length({points:[draft.points.at(-1),p]})>.01)draft.points.push(p);redraw()}catch(err){status(err.message)}}
-function barsRender(){const svg=$('drawing');bars.concat(draft?[draft]:[]).forEach((b,i)=>{const points=b.points.map(p=>C.project(p,view)),g=node('g',{'data-busbar':i,'aria-label':'Тоководеща шина '+(i+1)});const path=node('polyline',{points:points.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:W.phases[b.phase]?.color||b.color,'stroke-width':view==='side'?b.thickness*2:b.width*(view==='front'?scale:1.25),'stroke-linejoin':'round',opacity:i===active?1:.84,style:'cursor:pointer'},g);if(W.phases[b.phase]?.stripe)node('polyline',{points:path.getAttribute('points'),fill:'none',stroke:W.phases[b.phase].stripe,'stroke-width':path.getAttribute('stroke-width'),'stroke-dasharray':'10 10','pointer-events':'none'},g);path.addEventListener('pointerdown',e=>{if(editing)return;e.stopPropagation();active=i;selected=-1;vertex=0;showSelection();redraw()});b.holes.forEach(h=>{const p=points[h.index];if(h.bolt){node('path',{d:`M ${p.x-5} ${p.y} h 10 M ${p.x} ${p.y-5} v 10`,stroke:'#1c3040','stroke-width':3},g)}node('circle',{cx:p.x,cy:p.y,r:h.diameter*(view==='front'?scale:1.25)/2,fill:h.bolt?'#9aaab5':'#fff',stroke:'#34495e','stroke-width':1},g)});if(i===active||b===draft)points.forEach((p,j)=>{const h=node('circle',{cx:p.x,cy:p.y,r:j===vertex?6:4,fill:'#fff',stroke:'#0b5292','stroke-width':2,style:'cursor:move','data-vertex':j},g);h.addEventListener('pointerdown',e=>{if(view!=='front'||editing)return;e.stopPropagation();vertex=j;moving={kind:'vertex',i,j};svg.setPointerCapture(e.pointerId);showSelection()})})})}
+function barsRender(){const svg=$('drawing');bars.concat(draft?[draft]:[]).forEach((b,i)=>{const points=b.points.map(p=>C.project(p,view)),g=node('g',{'data-busbar':i,'aria-label':'Тоководеща шина '+(i+1)});const path=node('polyline',{points:points.map(p=>p.x+','+p.y).join(' '),fill:'none',stroke:W.phases[b.phase]?.color||b.color,'stroke-width':view==='side'?b.thickness*2:b.width*(view==='front'?scale:1.25),'stroke-linejoin':'round',opacity:i===active?1:.84,style:'cursor:pointer'},g);if(W.phases[b.phase]?.stripe)node('polyline',{points:path.getAttribute('points'),fill:'none',stroke:W.phases[b.phase].stripe,'stroke-width':path.getAttribute('stroke-width'),'stroke-dasharray':'10 10','pointer-events':'none'},g);path.addEventListener('pointerdown',e=>{if(editing)return;e.stopPropagation();active=i;selected=-1;selectedWire=null;vertex=0;showSelection();redraw()});b.holes.forEach(h=>{const p=points[h.index];if(h.bolt){node('path',{d:`M ${p.x-5} ${p.y} h 10 M ${p.x} ${p.y-5} v 10`,stroke:'#1c3040','stroke-width':3},g)}node('circle',{cx:p.x,cy:p.y,r:h.diameter*(view==='front'?scale:1.25)/2,fill:h.bolt?'#9aaab5':'#fff',stroke:'#34495e','stroke-width':1},g)});if(i===active||b===draft)points.forEach((p,j)=>{const h=node('circle',{cx:p.x,cy:p.y,r:j===vertex?6:4,fill:'#fff',stroke:'#0b5292','stroke-width':2,style:'cursor:move','data-vertex':j},g);h.addEventListener('pointerdown',e=>{if(view!=='front'||editing)return;e.stopPropagation();vertex=j;moving={kind:'vertex',i,j};svg.setPointerCapture(e.pointerId);showSelection()})})})}
 function boardRender(){
  const svg=$('drawing');svg.replaceChildren();const front=view==='front',w=front?cabinet.widthMm+45:Math.max(660,cabinet.widthMm*1.25+300),h=front?cabinet.heightMm+95:Math.max(850,cabinet.heightMm*1.5+180);svg.setAttribute('width',w);svg.setAttribute('height',h);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
  const defs=node('defs');for(const [id,stops]of [['cad-metal',['#6c767b','#f9fafb','#a4afb6','#e4e9ed','#68747b']],['cad-device',['#d0d4d7','#fff','#e5e8ea']],['cad-blue',['#537aab','#113b75','#305f98']]]){const grad=node('linearGradient',{id,x1:'0%',y1:'0%',x2:'0%',y2:'100%'},defs);stops.forEach((color,i)=>node('stop',{offset:(i/(stops.length-1)*100)+'%','stop-color':color},grad))}
- if(front){node('image',{href:'assets/electric-cabinet-render.webp',x:30,y:59,width:cabinet.widthMm,height:cabinet.heightMm,preserveAspectRatio:'none','pointer-events':'none'});const bx=42,ex=30+cabinet.widthMm-12,ey=59+cabinet.heightMm-16;node('path',{d:`M ${bx} 47 H ${ex} M ${bx} 38 V 57 M ${ex} 38 V 57 M 22 73 V ${ey} M 15 73 H 29 M 15 ${ey} H 29`,stroke:'#17253d','stroke-width':1,fill:'none'});txt((bx+ex)/2-27,35,cabinet.widthMm+' mm',15,'#111b2f');const t=txt(13,(73+ey)/2+35,cabinet.heightMm+' mm',15,'#111b2f');t.setAttribute('transform',`rotate(-90 13 ${(73+ey)/2+35})`);if(mode==='din')for(let r=0;r<rows;r++){const y=120+r*pitch(),x=46+inset(),rw=modules*18+8;node('rect',{x,y:y+24,width:rw,height:35,fill:'url(#cad-metal)',stroke:'#616d76','stroke-width':1});for(let i=x+7;i<x+rw-13;i+=23)node('rect',{x:i,y:y+38,width:13,height:6,rx:3,fill:'#606c74'});if(r>0){node('rect',{x:x-7,y:y-35,width:rw+14,height:18,fill:'url(#cad-metal)',stroke:'#758087'});for(let i=x-2;i<x+rw;i+=10)node('rect',{x:i,y:y-32,width:5,height:12,fill:'#4c5459'})}}}
+ if(front){node('image',{href:'assets/electric-cabinet-render.webp',x:30,y:59,width:cabinet.widthMm,height:cabinet.heightMm,preserveAspectRatio:'none','pointer-events':'none'});const bx=42,ex=30+cabinet.widthMm-12,ey=59+cabinet.heightMm-16;node('path',{d:`M ${bx} 47 H ${ex} M ${bx} 38 V 57 M ${ex} 38 V 57 M 22 73 V ${ey} M 15 73 H 29 M 15 ${ey} H 29`,stroke:'#17253d','stroke-width':1,fill:'none'});txt((bx+ex)/2-27,35,cabinet.widthMm+' mm',15,'#111b2f');const t=txt(13,(73+ey)/2+35,cabinet.heightMm+' mm',15,'#111b2f');t.setAttribute('transform',`rotate(-90 13 ${(73+ey)/2+35})`);if(mode==='din')for(let r=0;r<rows;r++){const y=120+r*pitch(),x=46+inset(),rw=modules*18+8;node('rect',{x,y:y+24,width:rw,height:35,fill:'url(#cad-metal)',stroke:'#616d76','stroke-width':1});for(let i=x+7;i<x+rw-13;i+=23)node('rect',{x:i,y:y+38,width:13,height:6,rx:3,fill:'#606c74'});if(r>0){node('rect',{x:x-7,y:y-35,width:rw+14,height:18,fill:'#dae4ee','fill-opacity':.62,stroke:'#758087','data-wire-channel':r*pitch()-26});for(let i=x-2;i<x+rw;i+=10)node('rect',{x:i,y:y-32,width:5,height:12,fill:'#4c5459','pointer-events':'none'})}}}
  else{txt(30,45,view==='side'?'Страничен изглед · отстояния от монтажната плоча':'Аксонометричен изглед',22);node('rect',{x:30,y:65,width:w-60,height:h-100,fill:'#f2f6fc',stroke:'#9aaabe'})}
  if(front&&mode==='free')for(const rail of dinRails){
   const p=C.project({...rail,z:0},view);
   node('rect',{x:p.x,y:p.y,width:rail.width,height:12,fill:'url(#cad-metal)',stroke:'#616d76','data-din-rail':''});
  }
- items.forEach((it,i)=>{const pos=position(it),p=C.project({...pos,z:front?0:Math.min(25,cabinet.depthMm)},view),g=node('g',{'data-device':i,style:'cursor:grab'});const ww=view==='side'?(it.depthMm||70)*2:widthOf(it)*(view==='3d'?1.25:1),hh=heightOf(it)*(view==='side'?1.5:view==='3d'?1.1:1);PDGDeviceFace.draw(node,g,it,p.x,p.y,ww,hh,Math.max(1,W.poleCount(it)));if(i===selected||marked.has(it)){node('rect',{x:p.x-2,y:p.y-2,width:ww+4,height:hh+4,fill:'none',stroke:'#064bff','stroke-width':2},g);for(const x of [p.x-2,p.x+ww+2])for(const y of [p.y-2,p.y+hh+2])node('rect',{x:x-2,y:y-2,width:4,height:4,fill:'#fff',stroke:'#064bff'},g)}g.addEventListener('pointerdown',e=>{if(editing||wiring||!front)return;e.stopPropagation();selected=i;active=-1;moving={kind:marked.size>1&&marked.has(it)?'group':'device',i,start:pfrom(e),pos};svg.setPointerCapture(e.pointerId);showSelection()})});
+ items.forEach((it,i)=>{const pos=position(it),p=C.project({...pos,z:front?0:Math.min(25,cabinet.depthMm)},view),g=node('g',{'data-device':i,style:'cursor:grab'});const ww=view==='side'?(it.depthMm||70)*2:widthOf(it)*(view==='3d'?1.25:1),hh=heightOf(it)*(view==='side'?1.5:view==='3d'?1.1:1);PDGDeviceFace.draw(node,g,it,p.x,p.y,ww,hh,Math.max(1,W.poleCount(it)));if(i===selected||marked.has(it)){node('rect',{x:p.x-2,y:p.y-2,width:ww+4,height:hh+4,fill:'none',stroke:'#064bff','stroke-width':2},g);for(const x of [p.x-2,p.x+ww+2])for(const y of [p.y-2,p.y+hh+2])node('rect',{x:x-2,y:y-2,width:4,height:4,fill:'#fff',stroke:'#064bff'},g)}g.addEventListener('pointerdown',e=>{if(editing||wiring||!front)return;e.stopPropagation();selected=i;selectedWire=null;active=-1;moving={kind:marked.size>1&&marked.has(it)?'group':'device',i,start:pfrom(e),pos};svg.setPointerCapture(e.pointerId);showSelection()})});
  $('bom').textContent=items.map(it=>(it.sku?it.sku+' · ':'')+it.name+' '+it.rating).join(' | ');$('summary').textContent=`Апарати: ${items.length} · шини: ${bars.length} · дължина: ${Math.round(bars.reduce((s,b)=>s+C.length(b),0))} mm`;
 }
 function terminalName(end) {
@@ -87,7 +108,7 @@ function terminalName(end) {
     return (items[index]?.designation||'Q'+(index+1)) + ' · ' + (end.side==='top'?'горна ':'долна ') + (end.pole+1);
 }
 function stopWire() {
-    wiring=false; wireStart=null; wireBends=[];
+    wiring=false; wireStart=null; wireBends=[];channelY=undefined;branchDraft=null;branching=false;
     $('drawConnection').setAttribute('aria-pressed','false');
 }
 function connect(entry) {
@@ -104,10 +125,12 @@ function connect(entry) {
         status('Избрана ' + terminalName(end) + '. Посочи клема, шина или щракни за чупка.');
     } else {
         const connection={from:wireStart,to:end,bends:wireBends,phase:phaseSelect.value};
+        if(channelY!==undefined)Object.assign(connection,{id:crypto.randomUUID(),channelY});
+        if(branchDraft)Object.assign(connection,branchDraft);
         try {
             W.validate(items,[...connections,connection],bars);
             connections.push(connection);
-            wireStart=null; wireBends=[];
+            wireStart=null;wireBends=[];channelY=undefined;branchDraft=null;branching=false;
             status('Връзката е записана. Можеш да започнеш следваща.');
         } catch (error) { status(error.message); }
     }
@@ -117,10 +140,16 @@ const wireButton=button(toolbar,'Чертай проводник',()=>{
     if (wiring) {stopWire();redraw();status('Чертането на връзка е изключено.');return;}
     setView('front'); placing=false; wiring=true;
     wireButton.setAttribute('aria-pressed','true');
-    status('Избери клема или означена шина. Щракни върху плочата за чупки, после избери другия край.');
+    status('Избери начална клема, щракни в канала и избери крайна клема. Можеш и да чертаеш с ръчни чупки.');
     redraw();
 },'drawConnection');
 wireButton.setAttribute('aria-pressed','false');
+button(toolbar,'Добави отклонение',()=>{
+    setView('front');placing=false;wiring=true;branching=true;
+    wireButton.setAttribute('aria-pressed','true');
+    status('Щракни върху хоризонтален проводник в канала, после избери крайна клема.');
+    redraw();
+},'addWireBranch');
 function barPhaseControl(parent, value, change){
  const label=document.createElement('label');
  label.textContent='Проводник на шината';
@@ -233,14 +262,45 @@ function wireShape(tag, attrs, connection, width) {
     node(tag,{...base,stroke:phase?.color||'#087dc2','data-connection':'','aria-label':phase?.label||'Връзка'});
     if (phase?.stripe) node(tag,{...base,stroke:phase.stripe,'stroke-dasharray':'6 6','stroke-linecap':'butt'});
 }
+function channelLane(wire){
+    return wire.channelY+(['L1','L2','L3','N','PE'].indexOf(wire.phase)-2)*2.8;
+}
 function drawWires(entries) {
     const points=new Map(entries.filter(p=>p.end.device).map(p=>[W.key(p.end),p]));
-    for (const connection of connections) {
-        const resolve=end=>end.bar?W.tapPosition(bars.find(b=>b.id===end.bar),end):points.get(W.key(end));
-        const start=resolve(connection.from), end=resolve(connection.to);
+    const resolve=end=>end.bar?W.tapPosition(bars.find(b=>b.id===end.bar),end):points.get(W.key(end));
+    for (const [index,connection] of connections.entries()) {
+        let start=resolve(connection.from);
+        const end=resolve(connection.to);
         if(!start||!end)continue;
-        const route=W.route(start,end,connection.bends).map(p=>C.project({...p,z:0},view));
-        wireShape('polyline',{points:route.map(p=>p.x+','+p.y).join(' ')},connection,3);
+        if(connection.branchOf){
+            const parent=connections.find(w=>w.id===connection.branchOf),target=resolve(parent.to);
+            if(!target)continue;
+            start={x:start.x+(target.x-start.x)*connection.branchFraction,y:channelLane(parent)};
+            const tap=C.project({...start,z:0},view);
+            node('circle',{cx:tap.x,cy:tap.y,r:4,fill:W.phases[connection.phase].color,stroke:'#263447','pointer-events':'none','data-wire-junction':''});
+        }
+        const lane=channelLane(connection);
+        const bends=connection.channelY===undefined?connection.bends:[{x:start.x,y:lane},{x:end.x,y:lane}];
+        const route=W.route(start,end,bends).map(p=>C.project({...p,z:0},view));
+        const attrs={points:route.map(p=>p.x+','+p.y).join(' ')};
+        if(!wiring&&selectedWire===connection)node('polyline',{...attrs,fill:'none',stroke:'#2874ee','stroke-width':8,'pointer-events':'none'});
+        wireShape('polyline',attrs,connection,3);
+        const hit=node('polyline',{...attrs,fill:'none',stroke:'transparent','stroke-width':10,
+            'pointer-events':!wiring||branching?'stroke':'none','data-wire-index':index,style:'cursor:pointer'});
+        hit.addEventListener('pointerdown',event=>{
+            if(wiring||editing||placing||marking)return;
+            event.stopPropagation();selectedWire=connection;selected=-1;active=-1;marked.clear();
+            const point=drawingPoint(event);
+            if(!connection.branchOf&&connection.channelY!==undefined&&Math.abs(point.y-lane)<=7&&
+                point.x>=Math.min(start.x,end.x)&&point.x<=Math.max(start.x,end.x)){
+                moving={kind:'channel',index,start:point};
+                $('drawing').setPointerCapture(event.pointerId);
+                return;
+            }
+            redraw();showSelection();
+            status('Избран проводник. Delete го изтрива.');
+        });
+        hit.addEventListener('click',event=>event.stopPropagation());
         if(connection.from.bar||connection.to.bar){
             const tap=C.project({...(connection.from.bar?start:end),z:0},view);
             node('circle',{cx:tap.x,cy:tap.y,r:4,fill:W.phases[connection.phase]?.color||'#087dc2',stroke:'#263447','pointer-events':'none','data-busbar-tap':''});
@@ -281,12 +341,34 @@ $('drawing').addEventListener('pointerdown',event=>{
 $('drawing').addEventListener('click',event=>{
     if (!wiring) return;
     event.preventDefault();event.stopImmediatePropagation();
+    if(branching&&!wireStart){
+        const hit=event.target.closest('[data-wire-index]');
+        const wire=hit&&connections[Number(hit.getAttribute('data-wire-index'))];
+        if(!wire?.id||wire.branchOf||wire.channelY===undefined)return;
+        const entries=terminalEntries();
+        const resolve=end=>end.bar?W.tapPosition(bars.find(b=>b.id===end.bar),end):entries.find(p=>W.key(p.end)===W.key(end));
+        const from=resolve(wire.from),to=resolve(wire.to),point=drawingPoint(event);
+        if(!from||!to||Math.abs(to.x-from.x)<1||Math.abs(point.y-channelLane(wire))>7){
+            status('Избери хоризонталния участък на проводника в канала.');return;
+        }
+        wireStart=wire.from;channelY=wire.channelY;phaseSelect.value=wire.phase;
+        branchDraft={branchOf:wire.id,branchFraction:Math.max(0,Math.min(1,(point.x-from.x)/(to.x-from.x)))};
+        branching=false;
+        status('Избери крайната клема на отклонението.');
+        redraw();return;
+    }
     const target=event.target.closest('[data-terminal]');
     if (target) {
         const [index,side,pole]=target.getAttribute('data-terminal').split(':');
         const entry=terminalEntries().find(t=>t.index===Number(index)&&t.end.side===side&&t.end.pole===Number(pole));
         if (entry) connect(entry);
         return;
+    }
+    const channel=event.target.closest('[data-wire-channel]');
+    if(channel&&wireStart&&!branchDraft){
+        channelY=Number(channel.getAttribute('data-wire-channel'));wireBends=[];
+        status('Каналът е избран. Щракни върху крайната клема.');
+        redraw();return;
     }
     const busbar=event.target.closest('[data-busbar]');
     if(busbar){
@@ -300,6 +382,7 @@ $('drawing').addEventListener('click',event=>{
     const point=drawingPoint(event);
     const x=Math.round(point.x/5)*5, y=Math.round(point.y/5)*5;
     if (x<0 || x>usableW() || y<0 || y>usableH()) return status('Чупката трябва да е в монтажната плоча.');
+    if(branchDraft||channelY!==undefined)return;
     wireBends.push({x,y});redraw();
 },true);
 const groupButton=button(toolbar,'Маркирай група',()=>{
@@ -405,10 +488,14 @@ redraw=function(){
     const ids=new Set(items.map(it=>it.connectionId).filter(Boolean));
     const exists=end=>end.bar?bars.some(b=>b.id===end.bar):ids.has(end.device);
     connections=connections.filter(link=>exists(link.from)&&exists(link.to));
+    const wireIds=new Set(connections.map(link=>link.id));
+    connections=connections.filter(link=>!link.branchOf||wireIds.has(link.branchOf));
+    if(!connections.includes(selectedWire))selectedWire=null;
     if (wireStart && !exists(wireStart)) {wireStart=null;wireBends=[];}
     rememberHistory();
-    if (view==='schematic') {renderConnectionsSchematic();renderWireList();return;}
+    if (view==='schematic') {renderConnectionsSchematic();resizeDrawing();renderWireList();return;}
     boardRender();
+    resizeDrawing();
     barsRender();
     if (view==='front') drawWires(terminalEntries());
     renderWireList();
@@ -436,7 +523,15 @@ $('drawing').addEventListener('pointerdown',event=>{
  }
  append(pfrom(event));
 },true);
-$('drawing').addEventListener('pointerup',e=>{if(moving){suppressClick=true;e.stopImmediatePropagation();const p=pfrom(e);if(moving.kind==='vertex'){p.z=bars[moving.i].points[moving.j].z;if(p.x<=usableW()&&p.y<=usableH())bars[moving.i].points[moving.j]=p;}else if(moving.kind==='group'){arrangeGroup('move',p.x-moving.start.x,p.y-moving.start.y);}else{const it=items[moving.i];if(mode==='din'){const r=it.row+Math.round((p.y-moving.start.y)/pitch()),c=it.col+Math.round((p.x-moving.start.x)/18);if(fits(r,c,it.width,moving.i)){it.row=r;it.col=c;delete it.x;delete it.y}}else{const x=Math.max(0,Math.min(usableW()-widthOf(it),moving.pos.x+p.x-moving.start.x)),y=Math.max(0,Math.min(usableH()-heightOf(it),moving.pos.y+p.y-moving.start.y));if(!items.some((other,i)=>{const q=position(other);return i!==moving.i&&x<q.x+widthOf(other)&&x+widthOf(it)>q.x&&y<q.y+heightOf(other)&&y+heightOf(it)>q.y})){it.x=x;it.y=y}}}moving=null;redraw();showSelection()}},true);
+$('drawing').addEventListener('pointerup',e=>{if(moving){suppressClick=true;e.stopImmediatePropagation();const p=pfrom(e);if(moving.kind==='channel'){
+ const wire=connections[moving.index],delta=drawingPoint(e).y-moving.start.y;
+ const next=Math.max(7,Math.min(usableH()-7,wire.channelY+delta));
+ if(Math.abs(delta)>2){
+  wire.channelY=next;
+  for(const branch of connections.filter(w=>w.branchOf===wire.id))branch.channelY=next;
+ }
+ status('Избран проводник. Delete го изтрива.');
+ }else if(moving.kind==='vertex'){p.z=bars[moving.i].points[moving.j].z;if(p.x<=usableW()&&p.y<=usableH())bars[moving.i].points[moving.j]=p;}else if(moving.kind==='group'){arrangeGroup('move',p.x-moving.start.x,p.y-moving.start.y);}else{const it=items[moving.i];if(mode==='din'){const r=it.row+Math.round((p.y-moving.start.y)/pitch()),c=it.col+Math.round((p.x-moving.start.x)/18);if(fits(r,c,it.width,moving.i)){it.row=r;it.col=c;delete it.x;delete it.y}}else{const x=Math.max(0,Math.min(usableW()-widthOf(it),moving.pos.x+p.x-moving.start.x)),y=Math.max(0,Math.min(usableH()-heightOf(it),moving.pos.y+p.y-moving.start.y));if(!items.some((other,i)=>{const q=position(other);return i!==moving.i&&x<q.x+widthOf(other)&&x+widthOf(it)>q.x&&y<q.y+heightOf(other)&&y+heightOf(it)>q.y})){it.x=x;it.y=y}}}moving=null;redraw();showSelection()}},true);
 $('drawing').addEventListener('pointercancel',()=>{moving=null});
 // Ignore painted grid dots and cabinet backgrounds when placing free-mounted devices.
 $('drawing').addEventListener('click',e=>{if(suppressClick){suppressClick=false;return}if(view!=='front'||editing||!placing||e.target.closest('[data-device],[data-busbar]'))return;const p=pfrom(e);if(mode==='free')placeFree(p);else place(Math.floor(p.y/pitch()),Math.floor((p.x-inset())/18))});
@@ -460,7 +555,7 @@ function applyProject(d){
  window.PDGQuote?.load(d.quote);
  $('boardMode').value=mode;$('project').value=String(d.project||'Електрическо табло');
  $('rows').value=rows;$('modules').value=modules;
- active=-1;selected=-1;placing=false;suppressClick=false;selectedCatalog=null;marked.clear();
+ active=-1;selected=-1;selectedWire=null;placing=false;suppressClick=false;selectedCatalog=null;marked.clear();
  setView('front');showSelection();
 }
 function rememberHistory(){
@@ -528,6 +623,16 @@ document.addEventListener('keydown',e=>{
  if((e.ctrlKey||e.metaKey)&&['z','y'].includes(key)){
   e.preventDefault();
   (key==='y'||e.shiftKey?redoButton:undoButton).click();return;
+ }
+ if(key==='delete'&&!editing&&!wiring&&view==='front'){
+  const chosen=marked.size?marked:(items[selected]?new Set([items[selected]]):null);
+  if(selectedWire)connections=connections.filter(w=>w!==selectedWire);
+  else if(active>=0&&bars[active])bars.splice(active,1);
+  else if(chosen)items=items.filter(item=>!chosen.has(item));
+  else return;
+  e.preventDefault();selectedWire=null;selected=-1;active=-1;marked.clear();
+  redraw();showSelection();status('Избраното е изтрито. Можеш да го върнеш с „Отмени“.');
+  return;
  }
  if(e.key==='Escape')cancel();
  if(e.key==='Enter'&&editing)finish();

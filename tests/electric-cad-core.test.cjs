@@ -168,3 +168,14 @@ test('DWG proposal places a fixed breaker and DIN equipment without modifying th
   assert.equal(result.project.connections[0].bends.length,4);
   assert.equal(result.unresolved.length,1);
 });
+
+test('channel branches persist and require a valid parent, shared phase and channel', () => {
+  const items=['a','b','c'].map((id,col)=>device(id,col));
+  const parent={...link(end('a','bottom'),end('b','top'),'L3'),id:'wire-one',channelY:90};
+  const branch={...link(parent.from,end('c','top'),'L3'),id:'wire-two',channelY:90,
+    branchOf:parent.id,branchFraction:.5};
+  assert.deepEqual(busbar.validate(project(items,[parent,branch])).connections,[parent,branch]);
+  assert.throws(()=>busbar.validate(project(items,[branch])),/Невалидно отклонение/);
+  assert.throws(()=>busbar.validate(project(items,[parent,{...branch,phase:'L2'}])),/Невалидно отклонение/);
+  assert.throws(()=>busbar.validate(project(items,[{...parent,channelY:900}])),/извън монтажната плоча/);
+});

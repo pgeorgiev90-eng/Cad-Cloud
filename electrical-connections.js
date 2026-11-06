@@ -43,7 +43,12 @@ function validate(items, connections = [], busbars = []) {
         devices.set(item.connectionId,item);
     }
     if (!Array.isArray(connections) || connections.length > 300) throw Error('Невалиден списък с връзки.');
-    const pairs = new Set();
+    const pairs = new Set(), byId=new Map();
+    for(const wire of connections){
+        if(wire?.id===undefined)continue;
+        if(typeof wire.id!=='string'||!(/^[a-z0-9-]{1,64}$/i.test(wire.id))||byId.has(wire.id))throw Error('Невалиден идентификатор на проводник.');
+        byId.set(wire.id,wire);
+    }
     const bars = new Map();
     for (const bar of busbars) {
         if (bar.phase!==undefined&&!Object.hasOwn(phases,bar.phase)) throw Error('Невалиден проводник на шина.');
@@ -65,6 +70,18 @@ function validate(items, connections = [], busbars = []) {
             !Array.isArray(connection.bends) || connection.bends.length > 24 ||
             !connection.bends.every(p => p && Number.isFinite(p.x) && p.x>=0 && p.x<=1600 &&
                 Number.isFinite(p.y) && p.y>=0 && p.y<=2400)) throw Error('Невалидна връзка между клеми.');
+        if(connection.channelY!==undefined&&(!Number.isFinite(connection.channelY)||connection.channelY<0||connection.channelY>2400)){
+            throw Error('Невалидно трасе през канал.');
+        }
+        if(connection.branchOf!==undefined){
+            const parent=byId.get(connection.branchOf);
+            if(!parent||parent===connection||parent.branchOf!==undefined||parent.channelY===undefined||
+                parent.channelY!==connection.channelY||!parent.from||parent.phase!==connection.phase||
+                key(parent.from)!==key(connection.from)||
+                !Number.isFinite(connection.branchFraction)||connection.branchFraction<0||connection.branchFraction>1){
+                throw Error('Невалидно отклонение от проводник.');
+            }
+        }
         const pair = [key(connection.from),key(connection.to)].sort().join('|');
         if (pairs.has(pair)) throw Error('Тези клеми вече са свързани.');
         pairs.add(pair);
