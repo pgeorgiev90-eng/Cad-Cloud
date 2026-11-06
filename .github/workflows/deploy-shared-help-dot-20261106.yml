@@ -1,0 +1,100 @@
+name: Publish compact site help button
+on:
+  push:
+    branches: [deploy/electric-cad-catalog-20261106]
+    paths: ['.github/workflows/deploy-shared-help-dot-20261106.yml']
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 9a1674106c54835b6cc0e01ab98a0701a4d56e83
+          path: previous
+      - uses: actions/checkout@v4
+        with:
+          ref: b266e41d373534044e10ffeea969ccc5b8b0275e
+          path: reviewed
+      - name: Verify the reviewed changes
+        working-directory: reviewed
+        run: node --check pdg-helper.js
+      - name: Publish and verify CAD files over FTPS
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, io, os, ssl, subprocess, tempfile
+          from pathlib import Path
+          paths = ['pdg-helper.js']
+          payload = {p: (Path('reviewed') / p).read_bytes() for p in paths}
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+          ftp.connect(os.environ['FTP_HOST'], 21)
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+          ftp.prot_p()
+          ftp.cwd('/')
+          def read(path):
+              buffer = io.BytesIO()
+              ftp.retrbinary('RETR ' + path, buffer.write)
+              return buffer.getvalue()
+          stage = {p: '.deploy-' + os.environ['GITHUB_RUN_ID'] + '-' + p for p in paths}
+          originals = {}
+          for p in paths:
+              old_file = Path('previous') / p
+              expected = old_file.read_bytes() if old_file.exists() else None
+              try:
+                  old = read(p)
+              except ftplib.error_perm as error:
+                  if expected is not None or not str(error).startswith('550'):
+                      raise
+                  old = None
+              if old not in (expected, payload[p]):
+                  raise RuntimeError('Unexpected hosting version: ' + p)
+              originals[p] = old
+          changed = []
+          try:
+              for p in paths:
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(payload[p]))
+                  assert read(stage[p]) == payload[p], p
+              for p in paths:
+                  ftp.rename(stage[p], p)
+                  changed.append(p)
+              for p in paths:
+                  assert read(p) == payload[p], p
+                  print('Verified', p)
+          except Exception:
+              for p in reversed(changed):
+                  if originals[p] is None:
+                      ftp.delete(p)
+                      continue
+                  ftp.storbinary('STOR ' + stage[p], io.BytesIO(originals[p]))
+                  ftp.rename(stage[p], p)
+                  assert read(p) == originals[p], p
+              raise
+          finally:
+              for p in paths:
+                  try:
+                      ftp.delete(stage[p])
+                  except ftplib.error_perm:
+                      pass
+              ftp.quit()
+      - name: Verify shared helper on the public domain
+        shell: python
+        run: |
+          import time, urllib.request
+          from pathlib import Path
+          root = 'https://pdgsystems.bg/'
+          def get(path):
+              with urllib.request.urlopen(root + path + '?verify=' + str(time.time_ns()), timeout=30) as r:
+                  return r.read()
+          assert get('pdg-helper.js') == Path('reviewed/pdg-helper.js').read_bytes()
+          for page in ('index.html','shop.html','catalog.html','product.html'):
+              assert b'pdg-helper.js' in get(page), page
+              print('Verified', page)
