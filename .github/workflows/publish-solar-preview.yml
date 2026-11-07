@@ -1,50 +1,12 @@
+# Publication is centralized in publish-solar-design.yml so both pages receive
+# identical behavior, a verified hosting baseline and a pre-upload backup.
 name: Publish isolated Solar CAD preview
 on:
-  push:
-    paths:
-      - '.github/workflows/publish-solar-preview.yml'
-      - 'solar-cad-preview.html'
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: pdg-production-deploy
-  cancel-in-progress: false
 jobs:
-  deploy:
+  notice:
     runs-on: ubuntu-latest
-    environment: production
     steps:
-      - uses: actions/checkout@v4
-      - name: Check preserved Solar CAD behavior
-        run: |
-          node tests/solar_mobile_test.js
-          node tests/solar_offer_test.js
-          node tests/solar_string_test.js
-          python - <<'PY'
-          from pathlib import Path
-          import re, subprocess
-          for i, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', Path('solar-cad-preview.html').read_text(), re.S)):
-              if code.strip():
-                  p=Path('/tmp/solar-'+str(i)+'.js')
-                  p.write_text(code)
-                  subprocess.run(['node','--check',str(p)],check=True)
-          PY
-      - name: Install encrypted FTP client
-        run: sudo apt-get update && sudo apt-get install -y lftp
-      - name: Publish isolated preview page
-        env:
-          FTP_HOST: ${{ secrets.FTP_HOST }}
-          FTP_USER: ${{ secrets.FTP_USER }}
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-        run: |
-          test -n "$FTP_HOST" && test -n "$FTP_USER" && test -n "$FTP_PASSWORD"
-          lftp -u "$FTP_USER","$FTP_PASSWORD" "ftp://$FTP_HOST:21" <<'LFTP'
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ssl:verify-certificate true
-          set net:max-retries 2
-          set net:timeout 20
-          set cmd:fail-exit true
-          put solar-cad-preview.html -o /solar-cad-preview.html
-          bye
-          LFTP
+      - run: echo 'Use Publish Solar CAD design to deploy both Solar CAD pages together.'

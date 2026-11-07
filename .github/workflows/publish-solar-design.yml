@@ -1,9 +1,13 @@
 name: Publish Solar CAD design
 on:
   push:
+    branches: [main]
     paths:
       - '.github/workflows/publish-solar-design.yml'
       - 'roof-cad.php'
+      - 'solar-cad-preview.html'
+      - 'tests/solar_editor_test.js'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -15,37 +19,71 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Check preserved Solar CAD behavior
+      - name: Check PHP, editor geometry, mobile format, offers and strings
         run: |
+          php -l roof-cad.php
+          php -l api/cad-page-access.php
+          node tests/solar_editor_test.js
           node tests/solar_mobile_test.js
+          node tests/solar_location_test.js
           node tests/solar_offer_test.js
           node tests/solar_string_test.js
           python - <<'PY'
           from pathlib import Path
           import re, subprocess
-          for i, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', Path('roof-cad.php').read_text(), re.S)):
-              if code.strip():
-                  p=Path('/tmp/solar-'+str(i)+'.js')
-                  p.write_text(code)
-                  subprocess.run(['node','--check',str(p)],check=True)
+          for file in ('roof-cad.php','solar-cad-preview.html'):
+              for i, code in enumerate(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', Path(file).read_text(), re.S)):
+                  if code.strip():
+                      p=Path('/tmp/solar-'+str(i)+'.js'); p.write_text(code)
+                      subprocess.run(['node','--check',str(p)],check=True)
           PY
-      - name: Install encrypted FTP client
-        run: sudo apt-get update && sudo apt-get install -y lftp
-      - name: Publish Solar CAD page
+      - name: Verify deployed source and download rollback copies before changing hosting
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
         run: |
-          test -n "$FTP_HOST" && test -n "$FTP_USER" && test -n "$FTP_PASSWORD"
-          lftp -u "$FTP_USER","$FTP_PASSWORD" "ftp://$FTP_HOST:21" <<'LFTP'
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ssl:verify-certificate true
-          set net:max-retries 2
-          set net:timeout 20
-          set cmd:fail-exit true
-          put api/cad-page-access.php -o /api/cad-page-access.php
-          put roof-cad.php -o /roof-cad.php
-          bye
-          LFTP
+          import ftplib, ssl, os, hashlib, io
+          from pathlib import Path
+          expected = {'roof-cad.php':'db411e5bbc17b04d544ad3c253e02c4e13d1a13fab259ed2c8f0b33c96dec966','solar-cad-preview.html':'a6264e93e9633255671d23d134b52bebe12103f7f6ac7e95668c244fc7e1f2a9'}
+          Path('/tmp/solar-rollback').mkdir(exist_ok=True)
+          with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=45) as ftp:
+              ftp.connect(os.environ['FTP_HOST'],21)
+              ftp.login(os.environ['FTP_USER'],os.environ['FTP_PASSWORD']); ftp.prot_p(); ftp.cwd('/')
+              for file, known in expected.items():
+                  data=io.BytesIO(); ftp.retrbinary('RETR '+file,data.write); body=data.getvalue()
+                  Path('/tmp/solar-rollback/'+file).write_bytes(body)
+                  actual=hashlib.sha256(body).hexdigest()
+                  new=hashlib.sha256(Path(file).read_bytes()).hexdigest()
+                  print('Before deployment:',file,actual,flush=True)
+                  assert actual in (known,new), 'Unexpected hosting source; no files uploaded: '+file
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solar-cad-hosting-rollback-${{ github.sha }}
+          path: /tmp/solar-rollback/
+          retention-days: 30
+      - name: Upload only Solar CAD pages and verify exact deployed bytes
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, ssl, os, hashlib, io, urllib.request, time
+          from pathlib import Path
+          with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=45) as ftp:
+              ftp.connect(os.environ['FTP_HOST'],21)
+              ftp.login(os.environ['FTP_USER'],os.environ['FTP_PASSWORD']); ftp.prot_p(); ftp.cwd('/')
+              for file in ('solar-cad-preview.html','roof-cad.php'):
+                  body=Path(file).read_bytes()
+                  ftp.storbinary('STOR '+file,io.BytesIO(body))
+                  check=io.BytesIO(); ftp.retrbinary('RETR '+file,check.write)
+                  assert check.getvalue()==body, 'FTPS verification failed: '+file
+                  print('Verified hosting source:',file,hashlib.sha256(body).hexdigest(),flush=True)
+          time.sleep(4)
+          request=urllib.request.Request('https://pdgsystems.bg/solar-cad-preview.html?release='+os.environ['GITHUB_SHA'],headers={'User-Agent':'PDG-Solar-Release-Verification/1.0'})
+          with urllib.request.urlopen(request,timeout=45) as response:
+              assert response.status==200
+              assert response.read()==Path('solar-cad-preview.html').read_bytes(), 'Public response differs'
+          print('Verified public HTTPS Solar CAD response',flush=True)
