@@ -1,0 +1,55 @@
+name: Publish sitemap and robots
+on:
+  push:
+    branches: [main]
+    paths:
+      - sitemap.xml
+      - robots.txt
+      - .github/workflows/publish-sitemap.yml
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate, publish and verify sitemap files
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, ssl, os, io, urllib.request
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          paths = ('sitemap.xml', 'robots.txt')
+          root = ET.fromstring(Path('sitemap.xml').read_bytes())
+          assert root.tag == '{http://www.sitemaps.org/schemas/sitemap/0.9}urlset'
+          locations = root.findall('{*}url/{*}loc')
+          assert locations and all(x.text.startswith('https://pdgsystems.bg/') for x in locations)
+          assert 'Sitemap: https://pdgsystems.bg/sitemap.xml' in Path('robots.txt').read_text()
+          with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
+              ftp.connect(os.environ['FTP_HOST'], 21)
+              ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD'])
+              ftp.prot_p()
+              ftp.cwd('/')
+              for path in paths:
+                  data = Path(path).read_bytes()
+                  ftp.storbinary('STOR '+path+'.upload', io.BytesIO(data))
+                  check = io.BytesIO()
+                  ftp.retrbinary('RETR '+path+'.upload', check.write)
+                  assert check.getvalue() == data, path
+              for path in paths:
+                  ftp.rename(path+'.upload', path)
+                  print('Published:', path, flush=True)
+          for path in paths:
+              url = 'https://pdgsystems.bg/'+path+'?release='+os.environ['GITHUB_SHA']
+              with urllib.request.urlopen(url, timeout=40) as response:
+                  assert response.status == 200
+                  assert response.read() == Path(path).read_bytes(), path
+              print('Verified HTTP 200 and exact content:', path, flush=True)
