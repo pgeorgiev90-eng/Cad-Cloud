@@ -48,7 +48,7 @@ jobs:
         run: |
           import ftplib, ssl, os, hashlib, io, subprocess
           from pathlib import Path
-          expected = {'roof-cad.php':'db411e5bbc17b04d544ad3c253e02c4e13d1a13fab259ed2c8f0b33c96dec966','solar-cad-preview.html':'a6264e93e9633255671d23d134b52bebe12103f7f6ac7e95668c244fc7e1f2a9'}
+          expected = {'roof-cad.php':'9c25c67badf8e06092317e9c7a55cea4afcf28dbc12ca4646e99743d84b8ece8','solar-cad-preview.html':'9eae88496b6a371adf5181bda181048774b1ca981c1a4a2268b6d0de4f2ec81b'}
           Path('/tmp/solar-rollback/hosting-before').mkdir(parents=True,exist_ok=True)
           Path('/tmp/solar-rollback/source-before').mkdir(exist_ok=True)
           for file in expected:

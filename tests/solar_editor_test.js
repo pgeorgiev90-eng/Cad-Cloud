@@ -34,3 +34,13 @@ for(const file of ['roof-cad.php','solar-cad-preview.html']){
  ctx.localStorage.setItem=()=>{throw Error('quota')};project={...project,projectName:'Four'};vm.runInContext('save()',ctx);assert.match(status.textContent,/Експорт/);
  console.log('PASS: real autosave rotation, stable previous revision, corrupt current and storage quota failure');
 }
+{
+ const source=fs.readFileSync('solar-cad-preview.html','utf8'),ui={'preview-undo':{},'preview-redo':{},'welcome-panel':{hidden:true}};
+ let state={version:1,planes:[{}]},opened='';
+ const ctx=vm.createContext({JSON,api:{project:()=>state,restore:p=>{state=p},state:()=>({mode:'idle',points:0,roofs:state.planes.length}),open:s=>{opened=s}},$:id=>ui[id],plan:()=>{},refresh:()=>{}});
+ vm.runInContext('let undo=[],redo=[],busy=false,last="";'+source.slice(source.indexOf('function historyButtons()'),source.indexOf("$('preview-undo').onclick",source.indexOf('function historyButtons()'))),ctx);
+ vm.runInContext('undo.push(JSON.stringify({version:1,planes:[]}));travel(undo,redo)',ctx);
+ assert.equal(opened,'draw');assert.equal(ui['welcome-panel'].hidden,false);
+ vm.runInContext('travel(redo,undo)',ctx);assert.equal(state.planes.length,1);
+ console.log('PASS: actual undo restores empty workspace and redo restores project');
+}
