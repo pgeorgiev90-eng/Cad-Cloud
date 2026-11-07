@@ -1,0 +1,112 @@
+name: Publish Open Graph metadata
+on:
+  push:
+    branches: [main]
+    paths:
+      - social-page.php
+      - api/social-metadata.php
+      - assets/pdg-social.jpg
+      - tests/social_metadata.php
+      - .github/workflows/publish-social.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pdg-production-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP and metadata escaping
+        run: |
+          php -l api/social-metadata.php
+          php -l social-page.php
+          php tests/social_metadata.php
+      - name: Publish and verify social metadata
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: python
+        run: |
+          import ftplib, ssl, os, io, re, json, urllib.request, urllib.parse, urllib.error
+          from pathlib import Path
+          from html.parser import HTMLParser
+          from datetime import datetime, timezone
+          class Tags(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.meta = {}; self.canonical = []
+              def handle_starttag(self, tag, attrs):
+                  a = dict(attrs)
+                  if tag == 'meta':
+                      key = a.get('property', a.get('name'))
+                      if key: self.meta.setdefault(key, []).append(a.get('content', ''))
+                  if tag == 'link' and a.get('rel') == 'canonical': self.canonical.append(a['href'])
+          base = 'https://pdgsystems.bg/'
+          stamp = os.environ['GITHUB_SHA']
+          def get(path):
+              sep = '&' if '?' in path else '?'
+              request = urllib.request.Request(base+path+sep+'og_check='+stamp, headers={'User-Agent':'facebookexternalhit/1.1'})
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  return response.read(), response.headers
+          def check(path, expected_url, title=None):
+              body, headers = get(path)
+              assert 'text/html' in headers.get('Content-Type', ''), path
+              t = Tags(); t.feed(body.decode('utf-8'))
+              for key in ('og:title','og:description','og:url','og:type','og:site_name','og:locale','og:image','og:image:alt','twitter:card','twitter:title','twitter:description','twitter:image'):
+                  assert len(t.meta.get(key, [])) == 1 and t.meta[key][0], (path, key)
+              assert t.meta['og:url'] == [expected_url], (path, t.meta['og:url'])
+              assert t.canonical == [expected_url], path
+              assert t.meta['og:image'][0].startswith('https://'), path
+              assert t.meta['twitter:image'] == t.meta['og:image'], path
+              if title: assert t.meta['og:title'] == [title], path
+              print('Verified server-rendered Open Graph:', path, flush=True)
+          with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=35) as ftp:
+              ftp.connect(os.environ['FTP_HOST'], 21)
+              ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASSWORD']); ftp.prot_p(); ftp.cwd('/')
+              old = io.BytesIO()
+              try: ftp.retrbinary('RETR .htaccess', old.write)
+              except ftplib.error_perm as exc:
+                  if not (str(exc).startswith('550') and 'No such file or directory' in str(exc)): raise
+              original = old.getvalue()
+              backup = '.htaccess.pdg-social-backup-'+datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
+              if original: ftp.storbinary('STOR '+backup, io.BytesIO(original))
+              rules = b'# BEGIN PDG SOCIAL\nRewriteEngine On\nRewriteRule ^(?:product|catalog)\\.html$ /social-page.php [L,QSA]\n# END PDG SOCIAL\n'
+              cleaned = re.sub(rb'# BEGIN PDG SOCIAL\n.*?# END PDG SOCIAL\n?', b'', original, flags=re.S)
+              https_end = b'# END PDG HTTPS'
+              if https_end in cleaned:
+                  pos = cleaned.index(https_end)+len(https_end)
+                  updated = cleaned[:pos]+b'\n\n'+rules+cleaned[pos:]
+              else: updated = rules+b'\n'+cleaned
+              paths = ('assets/pdg-social.jpg','api/social-metadata.php','social-page.php','index.html','shop.html','catalog.html','product.html')
+              for path in paths:
+                  data = Path(path).read_bytes()
+                  ftp.storbinary('STOR '+path+'.upload', io.BytesIO(data))
+                  check_bytes = io.BytesIO(); ftp.retrbinary('RETR '+path+'.upload', check_bytes.write)
+                  assert check_bytes.getvalue() == data, path
+                  ftp.rename(path+'.upload', path)
+              ftp.storbinary('STOR .htaccess.upload', io.BytesIO(updated))
+              ftp.rename('.htaccess.upload', '.htaccess')
+              try:
+                  check('', base)
+                  check('shop.html', base+'shop.html')
+                  check('catalog.html', base+'catalog.html')
+                  products = json.loads(get('api/products.php')[0])['products']
+                  p = next(p for p in products if str(p.get('imageUrl') or '').startswith('https://'))
+                  check('product.html?id='+str(p['id']), base+'product.html?id='+str(p['id']), p['name']+' | PDG Systems')
+                  category = products[0]['category']
+                  category_path = 'catalog.html?category='+urllib.parse.quote(category, safe='')
+                  check(category_path, base+category_path, category+' | PDG Systems')
+                  check('catalog.html?section=inverters', base+'catalog.html?section=inverters', 'Инвертори | PDG Systems')
+                  image, headers = get('assets/pdg-social.jpg')
+                  assert headers.get('Content-Type','').startswith('image/jpeg') and image[:2] == b'\xff\xd8'
+                  try: get('product.html?id=invalid')
+                  except urllib.error.HTTPError as exc: assert exc.code == 404
+                  else: raise AssertionError('Invalid product must return 404')
+              except Exception:
+                  ftp.storbinary('STOR .htaccess', io.BytesIO(original))
+                  print('Restored previous routing after failed verification', flush=True)
+                  raise
