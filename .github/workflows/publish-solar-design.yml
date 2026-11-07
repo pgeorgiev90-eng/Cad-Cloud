@@ -19,6 +19,8 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Check PHP, editor geometry, mobile format, offers and strings
         run: |
           php -l roof-cad.php
@@ -44,16 +46,20 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         shell: python
         run: |
-          import ftplib, ssl, os, hashlib, io
+          import ftplib, ssl, os, hashlib, io, subprocess
           from pathlib import Path
           expected = {'roof-cad.php':'db411e5bbc17b04d544ad3c253e02c4e13d1a13fab259ed2c8f0b33c96dec966','solar-cad-preview.html':'a6264e93e9633255671d23d134b52bebe12103f7f6ac7e95668c244fc7e1f2a9'}
-          Path('/tmp/solar-rollback').mkdir(exist_ok=True)
+          Path('/tmp/solar-rollback/hosting-before').mkdir(parents=True,exist_ok=True)
+          Path('/tmp/solar-rollback/source-before').mkdir(exist_ok=True)
+          for file in expected:
+              previous=subprocess.check_output(['git','show','393d3e35054ab0340eac21eadfc12bea6fa15679:'+file])
+              Path('/tmp/solar-rollback/source-before/'+file).write_bytes(previous)
           with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=45) as ftp:
               ftp.connect(os.environ['FTP_HOST'],21)
               ftp.login(os.environ['FTP_USER'],os.environ['FTP_PASSWORD']); ftp.prot_p(); ftp.cwd('/')
               for file, known in expected.items():
                   data=io.BytesIO(); ftp.retrbinary('RETR '+file,data.write); body=data.getvalue()
-                  Path('/tmp/solar-rollback/'+file).write_bytes(body)
+                  Path('/tmp/solar-rollback/hosting-before/'+file).write_bytes(body)
                   actual=hashlib.sha256(body).hexdigest()
                   new=hashlib.sha256(Path(file).read_bytes()).hexdigest()
                   print('Before deployment:',file,actual,flush=True)
