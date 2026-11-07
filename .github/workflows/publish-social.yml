@@ -32,7 +32,7 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         shell: python
         run: |
-          import ftplib, ssl, os, io, re, json, urllib.request, urllib.parse, urllib.error
+          import ftplib, ssl, os, io, re, json, time, urllib.request, urllib.parse, urllib.error
           from pathlib import Path
           from html.parser import HTMLParser
           from datetime import datetime, timezone
@@ -50,8 +50,17 @@ jobs:
           def get(path):
               sep = '&' if '?' in path else '?'
               request = urllib.request.Request(base+path+sep+'og_check='+stamp, headers={'User-Agent':'facebookexternalhit/1.1'})
-              with urllib.request.urlopen(request, timeout=45) as response:
-                  return response.read(), response.headers
+              for attempt in range(4):
+                  time.sleep(3)
+                  try:
+                      with urllib.request.urlopen(request, timeout=45) as response:
+                          return response.read(), response.headers
+                  except urllib.error.HTTPError as exc:
+                      if exc.code != 429 or attempt == 3: raise
+                      retry = exc.headers.get('Retry-After', '30')
+                      delay = max(30, int(retry)) if retry.isdigit() else 60
+                      print('HTTP 429; waiting before verification retry', flush=True)
+                      time.sleep(delay)
           def check(path, expected_url, title=None):
               body, headers = get(path)
               assert 'text/html' in headers.get('Content-Type', ''), path
