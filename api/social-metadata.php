@@ -14,9 +14,17 @@ function pdg_social_tags(array $data): string {
     if (!filter_var($image, FILTER_VALIDATE_URL) || strtolower((string)parse_url($image, PHP_URL_SCHEME)) !== 'https') {
         $image = 'https://pdgsystems.bg/assets/pdg-social.jpg';
     }
+    // Some catalog thumbnails are only 25 px wide and cannot form a social preview.
+    $imagePath = parse_url($image, PHP_URL_PATH);
+    if (strtolower((string)parse_url($image, PHP_URL_HOST)) === 'pdgsystems.bg' && is_string($imagePath) && str_starts_with($imagePath, '/assets/')) {
+        $local = realpath(dirname(__DIR__).$imagePath);
+        $assets = realpath(dirname(__DIR__).'/assets');
+        $size = $local && $assets && str_starts_with($local, $assets.DIRECTORY_SEPARATOR) ? @getimagesize($local) : false;
+        if (!$size || $size[0] < 200 || $size[1] < 200) $image = 'https://pdgsystems.bg/assets/pdg-social.jpg';
+    }
     $defaultImage = $image === 'https://pdgsystems.bg/assets/pdg-social.jpg';
     $image = $e($image);
-    $alt = $e($data['alt'] ?? $data['title']);
+    $alt = $e($defaultImage ? 'PDG Systems — електроуслуги, фотоволтаици и електрически табла' : ($data['alt'] ?? $data['title']));
     $type = ($data['type'] ?? '') === 'product' ? 'product' : 'website';
     $html = "<!-- PDG SOCIAL START -->\n<title>$title</title>\n"
         . "<meta name=\"description\" content=\"$description\">\n"
